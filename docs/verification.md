@@ -39,3 +39,12 @@
 재검증: `PYTHONPATH=skill/scripts python3 -m unittest discover -s tests -v`
 
 실제 배포 확인 중 macOS launchd의 Desktop 접근 차단을 재현했습니다. 공용 데이터를 Application Support로 분리하고, 주간 실행용 Python 파일을 해시별 스냅샷으로 이 위치에 등록하도록 수정했습니다. GitHub CI의 Codex 미설치 환경도 테스트 실행 파일 fixture로 처리했습니다.
+
+## 최종 배포 확인
+
+- 로컬 자동 테스트 60개 통과.
+- GitHub Actions의 macOS/Linux × Python 3.9/3.12 네 조합 모두 통과: https://github.com/ISIF-3/house/actions/runs/37746103062
+- Desktop/house 저장소, house 명령과 Codex 스킬 연결 확인. 원격은 비공개 ISIF-3/house, 기본 브랜치는 main.
+- 실제 launchd 작업에서 오류 없는 첫 탐색 완료: 후보 30개(방별 검색 25개, Trending 5개). 새 후보 25건을 하나의 macOS 알림으로 제출. 실제 배너 열람 여부는 확인하지 않음.
+- 공용 데이터 경로는 Application Support, Desktop에 shared/workshop/runtime 바로가기 확인. 초기 Desktop 접근 실패 로그는 과거 기록으로 보존.
+- 설치된 명령의 새 임시 프로젝트가 올바른 공용 경로를 잠그는 것까지 확인. 기존 연구 프로젝트 변경 없음.

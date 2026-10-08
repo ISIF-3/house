@@ -88,8 +88,8 @@ assert find_house(root / 'literature') == root
 - [x] Run the same startup scenario with the skill; verify user notes remain intact, five rooms exist and goal/design records start without invented approvals/results.
 - [x] Validate skill metadata using skill-creator's `quick_validate.py`.
 - [x] Test install collision/idempotence and command/skill availability in a temporary prefix.
-- [ ] Install reviewed package at `~/Desktop/house`, `house` launcher at `~/.local/bin/house`, and the skill at `~/.agents/skills/house`; do not edit shell profiles or Codex config.
-- [ ] Verify installed command resolution and weekly service, push reviewed checkout to GitHub. Korean quickstart and live isolated CLI/scan checks completed.
+- [x] Install reviewed package at `~/Desktop/house`, `house` launcher at `~/.local/bin/house`, and the skill at `~/.agents/skills/house`; do not edit shell profiles or Codex config.
+- [x] Verify installed command resolution and weekly service, push reviewed checkout to GitHub. Korean quickstart and live isolated CLI/scan checks completed.
 
 ## Verification and boundaries
 
