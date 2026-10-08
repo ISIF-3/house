@@ -4,6 +4,7 @@ import copy
 import hashlib
 import json
 import os
+import sys
 from pathlib import Path
 from typing import Optional
 
@@ -13,7 +14,8 @@ from .templates import EMPTY_DIRECTORIES, ROOMS, ROOM_INSTRUCTIONS, project_temp
 
 
 def default_home() -> Path:
-    return Path(os.environ.get("HOUSE_HOME") or Path.home() / "Desktop/house").expanduser()
+    default = Path.home() / ('Library/Application Support/House' if sys.platform == 'darwin' else '.local/share/house')
+    return Path(os.environ.get("HOUSE_HOME") or default).expanduser()
 
 
 def _root(path: Path) -> Path:

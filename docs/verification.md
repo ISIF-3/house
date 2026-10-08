@@ -37,3 +37,5 @@
 실제 연구 모델 학습이나 외부 스킬 채택은 수행하지 않았습니다. 자동 테스트의 대표 검토 증거는 테스트 fixture이며 실제 후보의 품질 평가로 사용하지 않습니다. 화면 알림은 OS에 제출한 상태와 사용자가 실제로 본 상태를 구분합니다. 운영 기록·다운로드·연구 데이터는 Git 제외 대상입니다.
 
 재검증: `PYTHONPATH=skill/scripts python3 -m unittest discover -s tests -v`
+
+실제 배포 확인 중 macOS launchd의 Desktop 접근 차단을 재현했습니다. 공용 데이터를 Application Support로 분리하고, 주간 실행용 Python 파일을 해시별 스냅샷으로 이 위치에 등록하도록 수정했습니다. GitHub CI의 Codex 미설치 환경도 테스트 실행 파일 fixture로 처리했습니다.

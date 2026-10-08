@@ -45,7 +45,11 @@ class InstallTests(unittest.TestCase):
         self.assertEqual(value['StartCalendarInterval'], {'Weekday': 1, 'Hour': 9, 'Minute': 0})
         self.assertNotIn('RunAtLoad', value)
         self.assertEqual(value['ProgramArguments'][-1], str(self.base / 'common'))
-        self.assertEqual(value['ProgramArguments'][1], str(ROOT / 'scripts/weekly_scan.py'))
+        runner_script = Path(value['ProgramArguments'][1])
+        self.assertTrue(runner_script.is_file())
+        self.assertIn(str(self.base / 'common/runtime/runners'), str(runner_script))
+        self.assertEqual(value['WorkingDirectory'], str(self.base / 'common'))
+        self.assertNotIn(str(ROOT), value['ProgramArguments'][1])
         self.assertFalse(value.get('KeepAlive', False))
 
     def test_main_expands_home_once_for_install_and_scheduler(self):
@@ -58,6 +62,20 @@ class InstallTests(unittest.TestCase):
         self.assertEqual(install.call_args.args[3], expected)
         self.assertEqual(write.call_args.args[1], expected)
         self.assertEqual(activate.call_args.args[1], expected)
+
+    def test_views_point_at_shared_data_and_runner_is_reusable(self):
+        repo = self.base / 'checkout'
+        (repo / 'bin').mkdir(parents=True)
+        (repo / 'bin/house').write_text('fixture')
+        (repo / 'skill').mkdir()
+        home = self.base / 'common'
+        self.install.install(repo, self.base / 'bin', self.base / 'skills', home, views=True)
+        self.assertEqual((repo / 'workshop').resolve(), home / 'workshop')
+        first = self.install.prepare_runner(ROOT, home)
+        self.assertEqual(self.install.prepare_runner(ROOT, home), first)
+        (first / 'scripts/weekly_scan.py').write_text('modified')
+        with self.assertRaises(self.install.HouseError):
+            self.install.prepare_runner(ROOT, home)
 
 
 if __name__ == '__main__':

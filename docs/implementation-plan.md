@@ -4,7 +4,7 @@
 
 **Goal:** Start or resume a five-room research workspace from a terminal or Codex skill, and discover, review, pin and apply room-specific GitHub skills without changing running projects.
 
-**Architecture:** A Python standard-library engine is shared by the terminal entrypoint and the `house` skill. Research files live in `<project>/house/`; common skills, releases and update records live at `HOUSE_HOME` (default `~/Desktop/house`). The CLI launches the locally installed Codex using its actual `--cd` interface. The skill uses the same engine within the current chat.
+**Architecture:** A Python standard-library engine is shared by the terminal entrypoint and the `house` skill. Research files live in `<project>/house/`; common skills, releases and update records live at `HOUSE_HOME` (default on macOS `~/Library/Application Support/House`; Desktop repository links to the data folders). The CLI launches the locally installed Codex using its actual `--cd` interface. The skill uses the same engine within the current chat.
 
 **Tech Stack:** Python 3.9+, unittest, POSIX file locks, GitHub HTTPS API and Codex CLI. No UI framework, daemon or external Python dependency.
 
@@ -98,3 +98,7 @@ Run the full unittest suite after integration, inspect changes and perform indep
 The first release provides actual initialization, room launch, persistent records and skill maintenance. It does not claim a permanently running autonomous multi-room daemon, a desktop GUI, or automatic scientific model execution. A launchd job runs weekly discovery only.
 
 Official integration sources: https://learn.chatgpt.com/docs/build-skills and https://learn.chatgpt.com/docs/cli/reference. Local CLI inspected: codex-cli 0.154.0; already signed in with ChatGPT.
+
+## Installation evidence and adjustment
+
+The first live launchd run was blocked by macOS Desktop privacy (Operation not permitted). Keep source at Desktop/house, place shared state plus hash-addressed weekly runner copies in Application Support, and show state through Desktop symlinks. GitHub CI also exposed a dry-run test dependency on locally installed Codex; use an explicit executable fixture in those tests.

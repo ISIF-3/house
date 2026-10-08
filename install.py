@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """Link this checkout into the user's CLI and Codex skill directories."""
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
 import plistlib
 import subprocess
 import sys
+import tempfile
 
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT / 'skill/scripts'))
@@ -23,7 +25,7 @@ def check_link(path, target):
         raise HouseError('Existing entry belongs to something else: ' + str(path))
 
 
-def install(repo, bin_dir, skills_dir, home):
+def install(repo, bin_dir, skills_dir, home, views=False):
     repo = Path(repo).resolve()
     targets = [(Path(bin_dir) / 'house', repo / 'bin/house'),
                (Path(skills_dir) / 'house', repo / 'skill')]
@@ -31,8 +33,12 @@ def install(repo, bin_dir, skills_dir, home):
         if not target.exists():
             raise HouseError('Incomplete source checkout: ' + str(target))
         check_link(path, target)
+    view_links = [(repo / name, Path(home).resolve() / name) for name in ('shared', 'workshop', 'runtime')] \
+                 if views and repo != Path(home).resolve() else []
+    for path, target in view_links:
+        check_link(path, target)
     bootstrap(Path(home))
-    for path, target in targets:
+    for path, target in targets + view_links:
         path.parent.mkdir(parents=True, exist_ok=True)
         check_link(path, target)
         if not path.is_symlink():
@@ -52,11 +58,12 @@ def write_schedule(repo, home, directory):
             raise HouseError('Unrecognized existing schedule: ' + str(path)) from exc
         if old.get('Label') != LABEL or old.get('HouseHome') != str(home):
             raise HouseError('Schedule belongs to a different House: ' + str(path))
+    runner = prepare_runner(repo, home)
     value = {
         'Label': LABEL,
         'HouseHome': str(home),
-        'ProgramArguments': [str(Path(sys.executable).resolve()), str(repo / 'scripts/weekly_scan.py'), str(home)],
-        'WorkingDirectory': str(repo),
+        'ProgramArguments': [str(Path(sys.executable).resolve()), str(runner / 'scripts/weekly_scan.py'), str(home)],
+        'WorkingDirectory': str(home),
         'StartCalendarInterval': {'Weekday': 1, 'Hour': 9, 'Minute': 0},
         'StandardOutPath': str(home / 'runtime/weekly.stdout.log'),
         'StandardErrorPath': str(home / 'runtime/weekly.stderr.log'),
@@ -72,6 +79,32 @@ def write_schedule(repo, home, directory):
         if temporary.exists():
             temporary.unlink()
     return path
+
+
+def prepare_runner(repo, home):
+    """Snapshot reviewed Python files outside Desktop's background privacy gate."""
+    files = {'scripts/weekly_scan.py': (repo / 'scripts/weekly_scan.py').read_bytes()}
+    for source in (repo / 'skill/scripts').rglob('*.py'):
+        if '__pycache__' not in source.parts:
+            files[str(source.relative_to(repo))] = source.read_bytes()
+    hashes = {name: hashlib.sha256(data).hexdigest() for name, data in files.items()}
+    revision = hashlib.sha256(json.dumps(hashes, sort_keys=True).encode()).hexdigest()
+    parent = safe_path(home, 'runtime/runners')
+    parent.mkdir(parents=True, exist_ok=True)
+    target = safe_path(home, 'runtime/runners/' + revision)
+    if not target.exists():
+        with tempfile.TemporaryDirectory(dir=str(parent), prefix='.runner-') as temp:
+            staged = Path(temp) / 'content'
+            staged.mkdir()
+            for relative, data in files.items():
+                path = safe_path(staged, relative)
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(data)
+            os.rename(str(staged), str(target))
+    for relative, expected in hashes.items():
+        if hashlib.sha256(safe_path(target, relative).read_bytes()).hexdigest() != expected:
+            raise HouseError('Weekly runner snapshot content changed: ' + relative)
+    return target
 
 
 def activate_schedule(path, home):
@@ -101,7 +134,7 @@ def main():
     args = p.parse_args()
     args.home = args.home.expanduser().absolute()
     try:
-        result = install(ROOT, args.bin_dir.expanduser(), args.skills_dir.expanduser(), args.home)
+        result = install(ROOT, args.bin_dir.expanduser(), args.skills_dir.expanduser(), args.home, views=True)
         if args.weekly:
             path = write_schedule(ROOT, args.home, Path.home() / 'Library/LaunchAgents')
             activate_schedule(path, args.home)

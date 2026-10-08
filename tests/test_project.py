@@ -237,7 +237,10 @@ class ProjectTests(unittest.TestCase):
         with patch.dict(os.environ, {"HOUSE_HOME": str(self.home)}):
             self.assertEqual(default_home(), self.home)
         with patch.dict(os.environ, {}, clear=True):
-            self.assertEqual(default_home(), Path.home() / "Desktop/house")
+            with patch('house_engine.project.sys.platform', 'darwin'):
+                self.assertEqual(default_home(), Path.home() / "Library/Application Support/House")
+            with patch('house_engine.project.sys.platform', 'linux'):
+                self.assertEqual(default_home(), Path.home() / ".local/share/house")
 
     def test_status_and_find_for_uninitialized_project(self):
         self.assertIsNone(find_house(self.project))

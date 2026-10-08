@@ -42,18 +42,18 @@ Main은 연구의 이유·최종 목표를 정리하고 데이터, 방법, 평�
 ├── scripts/weekly_scan.py
 ├── tests/                       동작·보존·업데이트 검증
 ├── docs/
-├── shared/                      로컬 공용 상태, Git 제외
+├── shared/ → 공용 상태           아래 공용 데이터 위치의 바로가기, Git 제외
 │   ├── config.json              새 프로젝트의 기본 릴리스
 │   ├── templates/               초기 양식
 │   ├── skills/store/            검토를 통과한 스킬의 고정 복사본
 │   └── releases/<version>/      방 지침·양식·스킬 연결·해시
-├── workshop/                    로컬 업데이트 작업실, Git 제외
+├── workshop/ → 업데이트 작업실   공용 데이터 위치의 바로가기, Git 제외
 │   ├── scans/                   GitHub 탐색 결과와 오류
 │   ├── candidates/              탐색 후보 기록·정확한 revision의 staged 스킬
 │   ├── validation/              내용 검토·대표 작업 검증 증거
 │   ├── notifications/           변화·적용·실패 기록
 │   └── schedule.json
-└── runtime/                     로컬 실행 기록·동시 실행 잠금
+└── runtime/ → 실행 기록          공용 데이터 위치의 바로가기, Git 제외
 
 /path/to/research-project/       사용자 프로젝트: 원래 파일 보존
 └── house/
@@ -74,6 +74,8 @@ Main은 연구의 이유·최종 목표를 정리하고 데이터, 방법, 평�
         └── GUIDE.md / requests/
 ```
 
+공용 데이터는 macOS에서 `~/Library/Application Support/House`에 저장합니다. Desktop의 세 바로가기로 같은 파일을 열 수 있습니다. 주간 작업도 이 위치에 저장한 실행 파일을 사용하므로 백그라운드에서 Desktop 접근 권한을 요구하지 않습니다. Linux 기본 데이터 위치는 `~/.local/share/house`입니다.
+
 모든 방에는 `ROOM.md`가 있습니다. 모델 작업을 실제로 시작하면 `work/model_v1.ipynb`와 `model_v1.md`를 만들고, 실행별 결과는 `output/model_v1/run-001/`의 `figure/`, `output/`, `results.md`, `run.json`으로 연결합니다. Discussion은 `council-model_v1.md` 등에 문헌·구현·결과를 근거로 개선안을 기록하며, Main이 결정한 후 다음 버전에 반영합니다.
 
 Main은 필요한 방에 입력 파일·목표·산출물 경로를 지정해 작업을 맡깁니다. Codex에서 subagent가 가능하면 한정된 일을 위임하고, 진행 상태와 인계는 MD에 남깁니다. 터미널 메뉴는 선택한 방의 Codex를 여는 진입점입니다. 항상 작동하는 자율 에이전트 군집이나 별도 채팅 생성 서비스는 아닙니다.
@@ -88,6 +90,7 @@ Finder나 VS Code에서 해당 프로젝트의 `house` 폴더를 열어 두면 �
 cd ~/Desktop/house
 git pull --ff-only
 PYTHONPATH=skill/scripts python3 -m unittest discover -s tests -v
+python3 install.py --weekly    # 주간 실행 파일도 최신 코드로 등록 (macOS)
 ```
 
 명령과 스킬이 저장소를 가리키므로 새 실행부터 변경된 코드를 사용합니다. 실행 중인 Codex 작업은 종료 후 다시 시작합니다. 로컬 수정이 있으면 먼저 검토해 커밋합니다. `shared/`, `workshop/`, `runtime/`, 연구 데이터는 Git 동기화 대상이 아니므로 다른 컴퓨터에 복제되지 않습니다.
@@ -128,7 +131,7 @@ launchctl bootout gui/$(id -u)/research.house.weekly  # 현재 로그인 세션�
 
 ## 다른 위치와 진단
 
-기본 공용 위치는 `~/Desktop/house`입니다. 별도 위치는 매 세션의 `HOUSE_HOME` 환경 변수 또는 `--home`으로 지정합니다. `install.py --home`만으로 셸·Codex의 환경을 바꾸지는 않습니다. 프로젝트를 만든 뒤에는 해당 프로젝트가 기록한 공용 경로를 우선 사용합니다.
+코드 저장소는 `~/Desktop/house`, 기본 공용 데이터는 macOS에서 `~/Library/Application Support/House`입니다. 주간 작업의 사용자 지정 데이터 경로는 Desktop·Documents·Downloads 같은 macOS 보호 폴더를 피합니다. 별도 위치는 매 세션의 `HOUSE_HOME` 환경 변수 또는 `--home`으로 지정합니다. `install.py --home`만으로 셸·Codex의 환경을 바꾸지는 않습니다. 프로젝트를 만든 뒤에는 해당 프로젝트가 기록한 공용 경로를 우선 사용합니다.
 
 `house room main --dry-run --json`은 폴더를 초기화하고 실제 Codex 실행 인자를 표시하지만 Codex를 실행하지 않습니다. `house context main --json`은 현재 채팅에서 사용할 지침을 출력합니다. Codex 실행 종료는 연구 완료와 구별해 기록합니다.
 

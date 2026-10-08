@@ -22,7 +22,8 @@ class CLITests(unittest.TestCase):
         self.project = self.base / 'research with spaces'
         self.project.mkdir()
         self.home = self.base / 'common house'
-        self.env = dict(os.environ, HOUSE_HOME=str(self.home))
+        # Dry-run tests must also work on CI machines with no Codex installation.
+        self.env = dict(os.environ, HOUSE_HOME=str(self.home), HOUSE_CODEX_BIN=sys.executable)
 
     def run_house(self, *args, input=None, cwd=None):
         return subprocess.run([sys.executable, str(SCRIPT), *args], cwd=cwd or self.project,
