@@ -1,0 +1,11 @@
+# All research, downloaded skills, reviews and machine-local state stay local.
+/shared/
+/workshop/
+/runtime/
+/archive/
+/house/
+__pycache__/
+*.py[cod]
+.DS_Store
+.env
+.venv/
