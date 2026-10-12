@@ -33,7 +33,9 @@ Resolve `scripts/house.py` relative to this SKILL.md. It uses Python 3.9+ and th
    python3 <skill-directory>/scripts/house.py context main --project <project-directory> --json
    ```
 
-   Substitute the selected room for `main`. Read the returned room guide, Main records and the listed **pinned** skill files. Do not replace the project's locked release with the newest shared default. If a pinned file is missing or changed, repair that specific issue before using it.
+   Substitute the selected room for `main`. Read `main/handoff.md` first, then the returned room guide, Main records and the listed **pinned** skill files. Do not replace the project's locked release with the newest shared default. If a pinned file is missing or changed, repair that specific issue before using it.
+
+   For an existing project, also run `python3 <skill-directory>/scripts/house.py check --project <project-directory>`. If it reports an older release, explain what `migrate` changes (House-owned files and status lines only, with backups in `main/jobs/`) and run it only after the user agrees.
 
 3. Begin the actual conversation and save the supplied research facts. In Main, connect:
 
@@ -45,7 +47,9 @@ Resolve `scripts/house.py` relative to this SKILL.md. It uses Python 3.9+ and th
    | Methods and detailed design | `main/design.md`, `main/designs/`, `work/` |
    | Results | `output/summary.md`, version/run folders |
 
-   Use `main/work.md` for progress, `decisions.md` for accepted choices and `handoff.md` for continuation. Preserve user-written content and add or revise only what the active request justifies. Empty templates are not completed research.
+   Use `main/work.md` as an append-only dated log, `decisions.md` for accepted choices and `handoff.md` as the current-state snapshot. Preserve user-written content and add or revise only what the active request justifies. Empty templates are not completed research.
+
+   Two kinds of text are House-owned and must be rewritten rather than preserved: a line marked `<!-- house:status -->` (replace it with the document's actual state and date when you write content; never add sentences explaining old template text) and `main/handoff.md` (rewrite it completely at the end of a session, under 8,000 characters, covering the checked time, running work, next actions, open questions and files to read first). If `house/` is not tracked by git, move the previous handoff to `main/handoffs/<YYYYMMDD-HHMM>.md` before rewriting.
 
 4. Ask for the next missing research decision at an appropriate level, rather than requesting all fields at once. For actual AI/statistical model development, explain the target, data, baseline, candidate methods, validation and resources, then establish design agreement before implementation. An approved House architecture is not approval of a particular research model.
 
@@ -53,8 +57,20 @@ Resolve `scripts/house.py` relative to this SKILL.md. It uses Python 3.9+ and th
 
 **Do not run interactive `house`, `house start`, or `house room` inside this chat.** Those commands launch another Codex terminal session. The `init` and `context` commands let this conversation remain the active Main or room.
 
+## Keep the records light
+
+The non-interactive record commands run inside this chat with the same `scripts/house.py`:
+
+- `check`: read-only report of size, raw-data candidates, git state, stale status lines, template-explanation lines and handoff length.
+- `offload <path>` / `offload --suggested`: move a raw-data folder or file from `house/` to the project's `house-data/`, leaving a relative link and an entry in `house-data.json`. Show the `--dry-run` list and get the user's confirmation first. Never offload the output folder of a computation that may still be running; paths changed in the last 30 minutes are refused unless the user confirms with `--allow-recent`.
+- `track`: start versioning `house/` text records (creates a repository in `house/`, or commits `house/` paths into an enclosing project repository). Ask before the first `track` in a user's existing repository. It refuses raw-data-sized additions.
+- `save -m '<summary>'`: commit only `house/` changes at the end of a work session when the project is tracked.
+- `migrate`: move a project pinned to an older release to the current structure, as described above.
+
+Results keep only summaries, small figures and tables, and the raw location, size and hash in `run.json`. Write new raw outputs outside `house/` from the start.
+
 ## Report the actual state
 
-State where the project lives, what was written, what was actually executed and the next unresolved decision. Keep facts, interpretations, proposals and accepted decisions distinct. Literature needs traceable sources; experiment results need an executed version and run ID. Never infer successful research from a subprocess exit or an empty output folder.
+State where the project lives, what was written, what was actually executed and the next unresolved decision. Update the handoff and, if tracked, `save` before ending. Keep facts, interpretations, proposals and accepted decisions distinct. Literature needs traceable sources; experiment results need an executed version and run ID. Never infer successful research from a subprocess exit or an empty output folder.
 
 The terminal application currently opens one selected Codex room at a time. It stores launch records and prevents overlapping launches of the same room. An always-running multi-room service and an enabled weekly scheduler are not implied by these commands.

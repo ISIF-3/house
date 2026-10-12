@@ -12,6 +12,7 @@ from unittest.mock import patch
 
 from house_engine.project import ROOMS, bootstrap, default_home, find_house, init_project, status
 from house_engine.storage import HouseError, atomic_json, locked, read_json, safe_path, validate_id
+from house_engine import __version__ as VERSION
 
 
 class ProjectTests(unittest.TestCase):
@@ -53,15 +54,15 @@ class ProjectTests(unittest.TestCase):
     def test_bootstrap_contract_and_hashed_immutable_release(self):
         result = bootstrap(self.home)
         config = read_json(self.home / "shared/config.json")
-        self.assertEqual(config, {"schema_version": 1, "current_release": "0.1.0",
-                                  "bindings": {room: [] for room in ROOMS}})
-        self.assertEqual(result["current_release"], "0.1.0")
-        manifest_path = self.home / "shared/releases/0.1.0/manifest.json"
+        self.assertEqual(config, {"schema_version": 1, "current_release": VERSION,
+                                  "bindings": {room: [] for room in ROOMS}, "engine_release": VERSION})
+        self.assertEqual(result["current_release"], VERSION)
+        manifest_path = self.home / f"shared/releases/{VERSION}/manifest.json"
         manifest = read_json(manifest_path)
-        self.assertEqual(manifest["version"], "0.1.0")
+        self.assertEqual(manifest["version"], VERSION)
         self.assertEqual(manifest["bindings"], config["bindings"])
         for room, digest in manifest["room_hashes"].items():
-            guide = self.home / "shared/releases/0.1.0/rooms" / room / "ROOM.md"
+            guide = self.home / f"shared/releases/{VERSION}/rooms" / room / "ROOM.md"
             self.assertEqual(hashlib.sha256(guide.read_bytes()).hexdigest(), digest)
 
         self.assertEqual(set(manifest["room_hashes"]), set(ROOMS))
@@ -89,7 +90,7 @@ class ProjectTests(unittest.TestCase):
         expanded['main/future-template.md'] = '# Future capability\n'
         with patch('house_engine.project.project_templates', return_value=expanded):
             result = self.init()
-            self.assertEqual(result['release'], '0.1.0')
+            self.assertEqual(result['release'], VERSION)
             self.assertEqual(status(self.project)['design_status'], 'unconfirmed')
         self.assertEqual((custom_directory / 'keep.txt').read_text(), 'user material')
 
@@ -186,7 +187,7 @@ class ProjectTests(unittest.TestCase):
         config["bindings"]["main"] = [{"path": "/new/skill"}]
         atomic_json(self.home / "shared/config.json", config)
         result = self.init()
-        self.assertEqual(result["release"], "0.1.0")
+        self.assertEqual(result["release"], VERSION)
         self.assertEqual((root / "hive.lock.json").read_bytes(), lock_before)
         self.assertEqual(read_json(root / "hive.lock.json")["bindings"], {r: [] for r in ROOMS})
 
@@ -226,7 +227,7 @@ class ProjectTests(unittest.TestCase):
         self.assertEqual([p.name for p in (root / "output").iterdir() if p.is_dir()], [])
         state = status(root / "work")
         self.assertEqual(state["root"], str(root))
-        self.assertEqual(state["release"], "0.1.0")
+        self.assertEqual(state["release"], VERSION)
         self.assertEqual(state["design_status"], "unconfirmed")
         self.assertEqual(state["results_status"], "not_recorded")
         self.assertEqual(set(state["rooms"]), set(ROOMS))

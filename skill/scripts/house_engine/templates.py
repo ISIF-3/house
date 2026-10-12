@@ -2,23 +2,37 @@
 
 ROOMS = ("main", "literature", "work", "output", "discussion")
 
+# A line carrying this marker is House-owned document state, not preserved user text.
+STATUS_MARK = "<!-- house:status -->"
+# Written by `house migrate` where an older initial line remained in a written record.
+MIGRATED_STATUS = "상태: 기록 있음 — 다음 작업에서 현재 상태로 갱신 필요 " + STATUS_MARK
+HANDOFF_LIMIT = 8000
+
 COMMON = """\n## 공통 원칙
 - 상위 HOUSE.md, AGENTS.md와 hive.lock.json을 먼저 읽는다. 실행 중인 프로젝트는 고정된 릴리스를 따른다.
 - 외부 스킬이 설치되었다고 가정하지 않는다. bindings가 비어 있으면 기본 지침만 사용한다.
 - bindings가 있으면 기록된 정확한 불변 경로와 리비전을 확인한다. 공유 기본값 변경을 현재 프로젝트에 자동 적용하지 않는다.
 - 연구 이유, 목표, 성공 기준, 데이터와 설계에 대한 사용자 합의를 먼저 기록한다. 합의 전 AI·통계 모델 구현이나 학습을 시작하지 않는다.
 - 기존 파일을 읽고 보존한다. 추정, 확인된 사실, 미실행 계획과 실제 실행 결과를 구분한다.
-- 각 작업 후 Main의 work.md에 진행 상황과 다음 행동을 남긴다. 근거와 결정은 상대 경로로 연결한다.
+- `<!-- house:status -->`가 붙은 줄은 House가 관리하는 문서 상태 줄이다. 문서에 실제 내용을 쓰면 이 줄을
+  `상태: <현재 상태> — <날짜> <!-- house:status -->`로 바꿔 쓴다. 보존 대상이 아니며 템플릿 문구를 해명하는 문장을 덧붙이지 않는다.
+- main/work.md는 날짜별 누적 로그다. 기존 항목은 고치지 않고 아래에 추가한다.
+- main/handoff.md는 현재 상태의 스냅샷이다. 작업을 마칠 때 전체를 다시 쓰고 8,000자 이내로 유지한다.
+  지난 내용은 work.md와 git 이력이 보존한다. house/가 git으로 추적되지 않으면 다시 쓰기 전에 이전 내용을 main/handoffs/<YYYYMMDD-HHMM>.md로 옮긴다.
+- 원본·대용량 데이터(체크포인트, 단계별 배열, 대량 로그)는 house/ 밖에 둔다. house/ 안에 생긴 원본 폴더는 `house offload <경로>`로
+  ../house-data/에 옮기고 결과 문서에는 요약·작은 그림·원본 위치를 남긴다. 실행 중인 계산의 출력 폴더는 옮기지 않는다.
+- 작업을 마치면 handoff를 갱신하고, house/가 git으로 추적되면 `house save -m '<요약>'`으로 기록을 커밋한다.
 """
 
 ROOM_INSTRUCTIONS = {
     "main": """# Main — 연구의 이유와 설계
 
-먼저 why.md와 target.md를 읽고 왜 이 연구가 필요한지, 어떤 질문에 답할지 사용자와 대화한다.
+먼저 handoff.md, why.md와 target.md를 읽고 왜 이 연구가 필요한지, 어떤 질문에 답할지 사용자와 대화한다.
 목표, 평가 기준, 데이터 사용 범위, 비교 기준과 제약을 정리한다. reference.md는 근거 탐색의 길잡이다.
 design.md와 method.md에 연구 설계와 방법을 제안하고, decisions.md에 사용자의 실제 동의와 변경 이유를 기록한다.
 질문을 한 번에 과도하게 묶지 않는다. 미확정 항목은 미확정으로 남긴다.
-work.md는 진행 기록이고 실제 코드·모델 작업은 Work에서 한다. results.md는 실행 근거가 생긴 뒤 갱신한다.
+work.md는 누적 진행 로그이고 실제 코드·모델 작업은 Work에서 한다. results.md는 실행 근거가 생긴 뒤 갱신한다.
+handoff.md는 다음 세션이 처음 읽는 현재 상태다. 확인 시각, 실행 중인 작업, 다음 행동, 미해결 질문과 먼저 읽을 파일만 남긴다.
 Literature의 근거, Work의 실행, Output의 요약을 연결하고 Discussion의 개선 요청을 검토해 결정한다.
 """,
     "literature": """# Literature — 출처를 따라갈 수 있는 문헌 정리
@@ -33,15 +47,18 @@ GUIDE.md를 따르고 reference.md에 출처 URL/DOI, 서지사항, 확인 상�
 
 시작 전에 Main의 design.md와 decisions.md에서 사용자의 설계 합의를 확인한다.
 설계가 미확정이면 먼저 Main과 논의한다. 실제 데이터·통계 분석·AI 모델을 임의로 시작하지 않는다.
-data/에는 사용자가 허용한 데이터와 출처를, src/에는 실제 작성한 코드를 둔다.
+data/에는 사용자가 허용한 작은 데이터와 출처를, src/에는 실제 작성한 코드를 둔다. 큰 원본 데이터는 house/ 밖에 두고 경로와 해시를 기록한다.
 모델 작업이 합의되면 model_v1.ipynb와 model_v1.md를 함께 만든다. 변경은 model_v2처럼 새 버전으로 기록한다.
 노트북은 실제 셀·실행 상태를 보존하고, MD는 목적·가정·입출력·평가·변경 이유를 설명한다.
 실행 결과는 ../output/<version>/<run>/에 저장한다. 버전·실행 ID, 명령, 환경, 데이터 식별자,
-난수 시드, 로그와 성공/실패를 연결한다. 초기화만으로 노트북이나 실행 결과를 만들지 않는다.
+난수 시드, 로그와 성공/실패를 연결한다. 체크포인트·단계별 배열 같은 원본 출력은 ../../house-data/나 계산 서버에 쓴다.
+초기화만으로 노트북이나 실행 결과를 만들지 않는다.
 """,
     "output": """# Output — 확인된 실행 결과와 해석
 
 결과는 output/<version>/<run>/ 규칙으로 구분한다. 각 실행의 모델/분석 버전과 재현 근거를 연결한다.
+run 폴더에는 results.md, run.json, figure/(작은 그림), output/(작은 표·요약 수치)만 둔다.
+원본 출력은 house/ 밖(../house-data/ 또는 계산 서버)에 두고 run.json의 raw 항목에 위치·크기·해시를 기록한다.
 summary.md에는 실제 관찰한 결과와 연구 목표 대비 해석을 기록한다. 현재 없는 결과는 미기록으로 둔다.
 표·그림은 원본 데이터와 실행 경로를 연결하고, 실패한 실행·불확실성·한계도 남긴다.
 계획이나 예상 수치를 실행 결과로 표현하지 않는다. 요약을 Main의 results.md와 연결한다.
@@ -62,24 +79,55 @@ PROJECT_TEMPLATES = {
 
 이 house/ 내부만 House가 만든 연구 공간이다. 외부 프로젝트의 파일과 규칙은 보존한다.
 main/에서 연구 이유와 목표를 정하고 설계에 합의한 뒤 literature/, work/, output/, discussion/으로 이동한다.
-각 방의 ROOM.md와 GUIDE.md(있는 경우)를 읽는다. main/work.md에서 진행 상황을 이어 간다.
+각 방의 ROOM.md와 GUIDE.md(있는 경우)를 읽는다. main/handoff.md에서 현재 상태를, main/work.md에서 누적 진행을 확인한다.
 hive.lock.json은 공유 홈, 프로젝트 릴리스와 스킬 bindings를 고정한다. 빈 bindings는 외부 스킬 미연결 상태다.
 공유 업데이트가 이 프로젝트를 자동 마이그레이션하지 않는다. 별도 합의 전 기존 잠금을 유지한다.
 초기 문서는 빈 연구 기록이며 설계 승인, 모델 실행 또는 결과를 의미하지 않는다.
+`<!-- house:status -->`가 붙은 줄은 문서의 현재 상태이며 내용을 쓸 때 함께 바꾼다.
+텍스트 기록은 git으로 추적하고(`house track`, `house save`), 원본 데이터는 ../house-data/에 둔다(`house offload`).
+house-data.json은 house/ 밖으로 옮긴 원본의 위치·크기·목록 해시를 기록한다.
 """,
     "AGENTS.md": """# House 내부 작업 지침
 
 이 지침은 이 house/ 범위에만 적용한다. 상위 프로젝트의 사용자 지침도 따른다.
-HOUSE.md, hive.lock.json, 선택한 방의 ROOM.md와 main/{why,target,design,decisions,work}.md를 읽는다.
+HOUSE.md, hive.lock.json, 선택한 방의 ROOM.md와 main/{handoff,why,target,design,decisions,work}.md를 읽는다.
 연구 이유와 목표를 사용자와 확인하고, 설계 합의를 기록한 뒤 구현·통계 분석·AI 모델 실행을 진행한다.
 승인·인용·데이터·실행·결과를 만들어내지 않는다. 기존 사용자 문서와 공유 릴리스는 덮어쓰지 않는다.
+예외: `<!-- house:status -->` 줄은 현재 상태로 바꿔 쓰고, main/handoff.md는 작업 종료 때 현재 상태 스냅샷으로 다시 쓴다.
 근거는 출처와 파일 경로로 연결한다. Discussion의 제안은 Main의 결정을 거친다.
-작업 진행은 main/work.md에 기록한다. 모델 노트북과 설명 MD를 버전별로 함께 관리하고 결과는 output/<version>/<run>/에 둔다.
+작업 진행은 main/work.md 아래에 날짜별로 추가한다. 모델 노트북과 설명 MD를 버전별로 함께 관리하고 결과는 output/<version>/<run>/에 둔다.
+원본·대용량 출력은 house/ 밖에 두고 위치·크기·해시만 기록한다. 실행 중인 계산의 출력 폴더는 옮기지 않는다.
 외부 스킬은 잠금의 bindings에 지정된 정확한 불변 경로를 확인한 뒤 필요할 때 읽는다.
+""",
+    ".gitignore": """# House 기록 저장소 규칙: 텍스트 기록은 추적하고 원본·대용량 데이터는 제외한다.
+# 원본 데이터는 `house offload <경로>`로 house/ 밖(../house-data/)에 옮긴다.
+# 상위 프로젝트의 ignore 규칙이 방 폴더 자체를 가리지 않도록 다시 포함한다.
+!/main/
+!/literature/
+!/work/
+!/output/
+!/discussion/
+# 운영체제·편집기·실행 캐시
+.DS_Store
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+# 대용량 수치·체크포인트 형식 (꼭 필요한 작은 파일은 git add -f로 추가)
+*.npy
+*.npz
+*.h5
+*.hdf5
+*.nc
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.pkl
+*.pickle
 """,
     "main/why.md": """# 연구 이유
 
-상태: 미확정 — 사용자와 대화 후 작성
+상태: 미확정 — 사용자와 대화 후 작성 <!-- house:status -->
 
 ## 문제와 배경
 
@@ -91,7 +139,7 @@ HOUSE.md, hive.lock.json, 선택한 방의 ROOM.md와 main/{why,target,design,de
 """,
     "main/target.md": """# 연구 목표
 
-상태: 초안 — 사용자와 확인 필요
+상태: 초안 — 사용자와 확인 필요 <!-- house:status -->
 
 ## 사용자가 제시한 목표
 
@@ -105,7 +153,7 @@ HOUSE.md, hive.lock.json, 선택한 방의 ROOM.md와 main/{why,target,design,de
 """,
     "main/design.md": """# 연구 설계
 
-상태: 미확정 — 사용자 합의 기록 없음
+상태: 미확정 — 사용자 합의 기록 없음 <!-- house:status -->
 
 ## 연구 질문과 목표 연결
 
@@ -123,48 +171,49 @@ HOUSE.md, hive.lock.json, 선택한 방의 ROOM.md와 main/{why,target,design,de
 """,
     "main/decisions.md": """# 설계와 변경 결정
 
-아직 기록된 결정이 없다. 실제 사용자 합의가 이루어진 뒤 작성한다.
+상태: 기록된 결정 없음 — 실제 사용자 합의 후 작성 <!-- house:status -->
 
 | 날짜 | 논의 내용 | 결정·합의 | 이유·근거 | 관련 문서 |
 | --- | --- | --- | --- | --- |
 """,
     "main/work.md": """# 연구 진행 기록
 
-상태: 초기 문서 생성 — 연구 작업은 아직 기록되지 않음
+상태: 기록 없음 — 첫 작업 후 갱신 <!-- house:status -->
 
-## 현재 단계
+날짜별 누적 로그다. 기존 항목은 고치지 않고 아래에 새 항목을 추가한다.
+현재 상태·다음 행동·미해결 질문은 handoff.md에 쓴다.
 
-연구 이유와 목표를 사용자와 확인하고 설계를 논의한다.
-
-## 진행 내역
-
-| 날짜 | 작업 | 근거·산출물 | 상태 | 다음 행동 |
+| 날짜 | 방 | 작업 | 근거·산출물 | 결과·상태 |
 | --- | --- | --- | --- | --- |
-
-## 미해결 질문
 """,
     "main/handoff.md": """# 다음 작업으로 이어가기
 
-상태: 초기화 — 아직 수행한 연구 작업 없음
+상태: 초기화 — 아직 수행한 연구 작업 없음 <!-- house:status -->
 
-## 마지막으로 확인한 상태
+이 문서는 누적 기록이 아니라 현재 상태의 스냅샷이다. 작업을 마칠 때마다 전체를 다시 쓰고 8,000자 이내로 유지한다.
+지난 진행은 work.md와 git 이력에 남는다.
+
+## 지금 상태 (확인 시각과 근거)
+
+## 실행 중이거나 대기 중인 작업
 
 ## 다음 작업과 필요한 입력
 
-## 미해결 질문·실행 중 작업
+## 미해결 질문
 
-## 관련 파일과 작업 ID
+## 먼저 읽을 파일
 """,
     "main/reference.md": """# 연구 근거 길잡이
 
+상태: 검증한 근거 없음 <!-- house:status -->
+
 문헌 목록은 ../literature/reference.md, 원문은 ../literature/reference/, 추출은 ../literature/extract/에 기록한다.
-아직 검증한 근거가 없다.
 
 ## 목표·설계와 연결되는 근거
 """,
     "main/method.md": """# 연구 방법
 
-상태: 미확정 — 설계 합의 후 구체화
+상태: 미확정 — 설계 합의 후 구체화 <!-- house:status -->
 
 ## 선택한 방법과 이유
 
@@ -176,7 +225,7 @@ HOUSE.md, hive.lock.json, 선택한 방의 ROOM.md와 main/{why,target,design,de
 """,
     "main/results.md": """# 연구 결과
 
-상태: 미기록 — 실행된 연구 결과 없음
+상태: 미기록 — 실행된 연구 결과 없음 <!-- house:status -->
 
 실제 실행이 생기면 ../output/summary.md와 버전/실행 경로를 연결한다.
 
@@ -194,7 +243,7 @@ HOUSE.md, hive.lock.json, 선택한 방의 ROOM.md와 main/{why,target,design,de
 """,
     "literature/reference.md": """# 문헌 목록
 
-아직 확인된 문헌이 없다. 실제 확인한 출처만 추가한다.
+상태: 확인된 문헌 없음 — 실제 확인한 출처만 추가 <!-- house:status -->
 
 | ID | 서지사항 | URL·DOI | 확인 상태 | 원문 경로 | 추출 경로 | 목표 관련성 |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -204,12 +253,13 @@ HOUSE.md, hive.lock.json, 선택한 방의 ROOM.md와 main/{why,target,design,de
 Main의 design.md와 decisions.md에서 설계 합의를 먼저 확인한다. data/와 src/는 실제 작업이 생기기 전까지 빈 폴더다.
 합의된 모델 작업을 시작할 때 model_v1.ipynb와 model_v1.md를 함께 만든다. 분석만 필요한 연구에 모델을 억지로 만들지 않는다.
 설명에는 목표, 입력/출력, 가정, 사용법, 평가 기준과 변경 이유를 기록한다.
-실행마다 ../output/<version>/<run>/에 실행 설정, 로그, 환경과 실제 산출물을 연결한다.
+실행마다 ../output/<version>/<run>/에 실행 설정, 로그 요약, 환경과 작은 산출물을 연결한다.
+체크포인트·단계별 배열·대량 로그 같은 원본은 ../../house-data/<version>/<run>/ 또는 계산 서버에 쓰고 run.json에 위치를 남긴다.
 실행하지 않은 셀·예정 결과를 완료된 결과로 기록하지 않는다.
 """,
     "output/summary.md": """# 결과 요약
 
-상태: 미기록 — 실제 실행 결과 없음
+상태: 미기록 — 실제 실행 결과 없음 <!-- house:status -->
 
 ## 버전과 실행
 
@@ -231,8 +281,27 @@ Main에 전달해 사용자와 결정하고 ../main/decisions.md의 결정 항�
 
 EMPTY_DIRECTORIES = ("main/designs", "main/jobs", "literature/reference", "literature/extract", "work/data", "work/src", "discussion/requests")
 
+# Exact placeholder sentences of release 0.1.0 that later releases express as status lines.
+LEGACY_PLACEHOLDERS = (
+    "아직 기록된 결정이 없다. 실제 사용자 합의가 이루어진 뒤 작성한다.",
+    "아직 확인된 문헌이 없다. 실제 확인한 출처만 추가한다.",
+    "아직 검증한 근거가 없다.",
+)
+
 
 def project_templates(goal=None):
     files = dict(PROJECT_TEMPLATES)
     files["main/target.md"] = files["main/target.md"].format(goal=goal if goal else "아직 기록된 목표가 없다.")
     return files
+
+
+def status_line(text):
+    """Return the House-owned status line of a template, including 0.1.0 ``상태:`` lines."""
+    lines = text.splitlines()
+    for line in lines:
+        if STATUS_MARK in line:
+            return line
+    for line in lines:
+        if line.startswith("상태:"):
+            return line
+    return None

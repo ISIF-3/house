@@ -23,6 +23,7 @@ house start                   # Main으로 바로 시작
 house room literature         # 문헌 방에서 Codex 실행
 house init --goal '연구 목표'  # 폴더만 생성
 house status                  # 기록된 상태 확인
+house check                   # 크기·git·상태 줄·handoff 점검 (변경 없음)
 ```
 
 Codex 앱·CLI·확장에서 프로젝트를 열고 **`$house 연구 목표를 정리하며 시작해줘`**라고 요청할 수도 있습니다. `/house`는 기본 슬래시 명령으로 등록되지 않습니다. 새 스킬이 보이지 않으면 Codex를 다시 열고 스킬 목록을 확인합니다. [Codex 스킬 문서](https://learn.chatgpt.com/docs/build-skills)
@@ -56,8 +57,10 @@ Main은 연구의 이유·최종 목표를 정리하고 데이터, 방법, 평�
 └── runtime/ → 실행 기록          공용 데이터 위치의 바로가기, Git 제외
 
 /path/to/research-project/       사용자 프로젝트: 원래 파일 보존
-└── house/
-    ├── HOUSE.md / AGENTS.md / hive.lock.json
+├── house-data/                  house offload로 옮긴 원본 데이터 (자체 .gitignore로 git 제외)
+└── house/                       텍스트 기록 (house track으로 git 추적)
+    ├── HOUSE.md / AGENTS.md / hive.lock.json / .gitignore
+    ├── house-data.json          옮긴 원본의 위치·크기·목록 해시
     ├── main/
     │   ├── why.md / target.md / design.md
     │   ├── method.md / reference.md / results.md
@@ -81,6 +84,37 @@ Main은 연구의 이유·최종 목표를 정리하고 데이터, 방법, 평�
 Main은 필요한 방에 입력 파일·목표·산출물 경로를 지정해 작업을 맡깁니다. Codex에서 subagent가 가능하면 한정된 일을 위임하고, 진행 상태와 인계는 MD에 남깁니다. 터미널 메뉴는 선택한 방의 Codex를 여는 진입점입니다. 항상 작동하는 자율 에이전트 군집이나 별도 채팅 생성 서비스는 아닙니다.
 
 Finder나 VS Code에서 해당 프로젝트의 `house` 폴더를 열어 두면 실제 생성·수정되는 파일을 볼 수 있습니다. 기존 연구를 완료 상태로 임의 분류하거나 이동하는 기능은 수행하지 않습니다.
+
+## 기록을 가볍게 유지하기 (0.2.0)
+
+- **상태 줄**: 문서의 `상태: … <!-- house:status -->` 줄은 House가 관리합니다. 내용을 쓰면 이 줄을 현재 상태로 바꿉니다. 초기 문구를 남겨 두고 해명 문장을 덧붙이지 않습니다. `house check`는 내용이 생겼는데 상태 줄이 그대로인 문서를 알려 줍니다.
+- **work와 handoff**: `main/work.md`는 날짜별 누적 로그, `main/handoff.md`는 매 작업 종료 때 전체를 다시 쓰는 현재 상태(8,000자 이내)입니다. 지난 내용은 work.md와 git 이력에 남습니다.
+- **원본 데이터 분리**: 체크포인트·단계별 배열·대량 로그는 house/ 밖에 둡니다. 이미 house/ 안에 생긴 폴더는 옮기고 원래 자리에 상대 링크를 남겨 기존 코드 경로가 그대로 작동합니다. `.md` 기록이 든 폴더와 최근 30분 안에 바뀐 폴더(실행 중일 수 있음)는 거부합니다.
+- **git 추적**: house/의 텍스트 기록만 커밋합니다. 프로젝트가 git 저장소가 아니면 house/에 저장소를 만들고, 저장소 안이면 house/ 경로만 커밋해 다른 staged 변경은 건드리지 않습니다. 10MB 넘는 파일, 합계 200MB, 5,000개를 넘는 추가는 거부합니다. house/.gitignore는 상위 프로젝트의 ignore 규칙이 방 폴더를 가리지 않게 다시 포함합니다.
+
+```sh
+house check                                   # 옮길 후보·git·상태 줄·handoff 길이
+house offload output/model_v1/run-001/cases   # 원본 폴더를 ../house-data/로 옮기고 링크 남김
+house offload --suggested --dry-run           # check 후보 전체의 이동 계획
+house track                                   # git 추적 시작 (첫 커밋)
+house save -m 'model_v1 run-002 결과 정리'      # house/ 기록만 커밋
+```
+
+## 이전 버전 프로젝트 업그레이드
+
+0.2.0 엔진을 처음 실행하면 공용 기본값이 0.2.0으로 한 번 바뀝니다. 기본값에 검토된 외부 스킬이 연결되어 있거나 이후 `rollback`한 경우에는 바꾸지 않습니다. 기존 프로젝트는 고정 버전을 유지하며, 프로젝트별로 아래 순서를 따릅니다.
+
+```sh
+cd /path/to/research-project
+house check                        # 현재 상태 확인
+house migrate --dry-run            # 바뀔 파일 목록 (변경 없음)
+house migrate                      # 적용: house/main/jobs/house-migrate-*/REPORT.md 생성
+house offload --suggested --dry-run
+house offload --suggested          # 실행 중인 계산이 없는지 확인한 뒤
+house track
+```
+
+`migrate`가 바꾸는 것은 House 소유 부분뿐입니다. 사용자가 손대지 않은 House 파일(ROOM.md, HOUSE.md, AGENTS.md, GUIDE.md, 빈 템플릿)은 새 버전으로 교체하고, 내용이 생긴 문서는 0.1.0 초기 상태 문구 한 줄만 `상태: 기록 있음 — 다음 작업에서 현재 상태로 갱신 필요 <!-- house:status -->`로 바꿉니다. 바꾼 파일의 원본은 `REPORT.md` 옆 `previous/`에, 고정 버전 변경은 `hive.lock.json`의 history에 남습니다. 상태 줄의 실제 내용, 템플릿 해명 문장 정리, 긴 handoff 다시 쓰기는 연구 내용을 읽어야 하므로 REPORT.md의 요청 예시로 Codex에 맡깁니다.
 
 ## 두 종류의 업데이트
 

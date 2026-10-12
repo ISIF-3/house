@@ -9,6 +9,7 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'skill/scripts'))
 from house_engine import cli
+from house_engine import __version__ as VERSION
 
 PACKAGE = Path(__file__).resolve().parents[1]
 SCRIPT = PACKAGE / 'skill/scripts/house.py'
@@ -119,7 +120,7 @@ class CLITests(unittest.TestCase):
 
     def test_context_rejects_modified_pinned_room_guide(self):
         self.assertEqual(self.run_house('init').returncode, 0)
-        (self.home / 'shared/releases/0.1.0/rooms/main/ROOM.md').write_text('altered')
+        (self.home / f'shared/releases/{VERSION}/rooms/main/ROOM.md').write_text('altered')
         result = self.run_house('context', 'main', '--project', str(self.project / 'house'))
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('hash', result.stderr)

@@ -14,7 +14,7 @@ Do not scaffold a trained model or output numbers merely to fill the structure. 
 
 ## Output
 
-Save results under `output/<model-version>/<run-id>/` with `figure/`, `output/`, `results.md` and a run record. Preserve completed runs. Work may write the original outputs and conditions; a designated validation task checks them and updates the result summary. Main assigns writing responsibility rather than allowing concurrent edits.
+Save results under `output/<model-version>/<run-id>/` with `figure/`, `output/`, `results.md` and a run record. Keep only summaries, small figures and tables there; write checkpoints, per-step arrays and bulk logs to `../house-data/<model-version>/<run-id>/` or the compute server and record their location, size and hash in the run record. Preserve completed runs. Work may write the original outputs and conditions; a designated validation task checks them and updates the result summary. Main assigns writing responsibility rather than allowing concurrent edits.
 
 `summary.md` uses consistent sections: goal/question, executed scope, observations, baseline/version comparison, goal attainment, validation/uncertainty/limits and reproducibility references. Metrics themselves depend on the research design.
 
@@ -24,4 +24,4 @@ Use `discussion/model_v1.md` to link the goal, design, papers/extracts, implemen
 
 ## Continue after interruption
 
-Read Main's handoff and unresolved work, then compare referenced files with what actually exists. Launch records show Codex process activity; they are not evidence that a research task succeeded. Do not automatically repeat an experiment that may still be running. Report the observed state and resume the authorized unfinished work.
+Read Main's handoff (the current-state snapshot) and unresolved work, then compare referenced files with what actually exists. Use `work.md` and git history for older context rather than expecting it in the handoff. Launch records show Codex process activity; they are not evidence that a research task succeeded. Do not automatically repeat an experiment that may still be running. Report the observed state and resume the authorized unfinished work.

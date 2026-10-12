@@ -9,8 +9,8 @@ from pathlib import Path
 from typing import Optional
 
 from . import __version__
-from .storage import HouseError, locked, read_json, safe_path, validate_id
-from .templates import EMPTY_DIRECTORIES, ROOMS, ROOM_INSTRUCTIONS, project_templates
+from .storage import HouseError, atomic_json, locked, read_json, safe_path, validate_id
+from .templates import EMPTY_DIRECTORIES, ROOMS, ROOM_INSTRUCTIONS, project_templates, status_line, MIGRATED_STATUS
 
 
 def default_home() -> Path:
@@ -131,12 +131,43 @@ def _release(home: Path, version: str):
     return manifest, rooms, templates
 
 
+def base_version(release):
+    """Numeric engine version of a release name such as 0.2.0 or 0.1.0-u...; None if unknown."""
+    head = str(release).split("-", 1)[0].split(".")
+    if len(head) != 3 or not all(part.isdigit() for part in head):
+        return None
+    return tuple(int(part) for part in head)
+
+
+def _advance_default(home: Path, config: dict, config_path: Path) -> dict:
+    """Once per engine version, move an unbound older default to the engine release.
+
+    A default carrying reviewed skill bindings, or a later explicit rollback, is kept.
+    """
+    if config.get("engine_release") == __version__:
+        return config
+    current, _, _ = _release(home, config["current_release"])
+    older = base_version(config["current_release"])
+    if older is not None and older < base_version(__version__) and not any(current["bindings"].values()):
+        manifest, _, templates = _release(home, __version__)
+        config.update(current_release=__version__, bindings=_bindings(manifest["bindings"]))
+        for relative, text in templates.items():
+            # shared/templates is House's informational copy of the default release.
+            target = safe_path(home, "shared/templates/" + relative)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(text, encoding="utf-8")
+    config["engine_release"] = __version__
+    atomic_json(config_path, config)
+    return config
+
+
 def bootstrap(home: Path) -> dict:
     """Create shared defaults once; return the current shared configuration."""
     home = _root(home)
     templates = project_templates()
     bindings = {room: [] for room in ROOMS}
-    initial_config = {"schema_version": 1, "current_release": __version__, "bindings": bindings}
+    initial_config = {"schema_version": 1, "current_release": __version__, "bindings": bindings,
+                      "engine_release": __version__}
     manifest = {
         "schema_version": 1, "version": __version__, "bindings": bindings,
         "room_hashes": {room: _digest(text) for room, text in ROOM_INSTRUCTIONS.items()},
@@ -176,7 +207,7 @@ def bootstrap(home: Path) -> dict:
             _release(home, __version__)
         for relative, text in files.items():
             _write_new(home, relative, text)
-        config = _config(read_json(config_path))
+        config = _advance_default(home, _config(read_json(config_path)), config_path)
         _release(home, config["current_release"])
         return config
 
@@ -300,4 +331,28 @@ def status(root: Path) -> dict:
                   for room in ROOMS},
         "design_status": document_state("main/design.md", "unconfirmed", "edited_review_required"),
         "results_status": document_state("output/summary.md", "not_recorded", "recorded_unverified"),
+        "documents": document_status(found, templates),
     }
+
+
+def document_status(root: Path, templates: dict) -> dict:
+    """Report each research record's status line; stale means content was written but the line was not."""
+    result = {}
+    for relative, template in sorted(templates.items()):
+        initial = status_line(template)
+        if initial is None:
+            continue
+        path = safe_path(root, relative)
+        if not path.is_file():
+            result[relative] = {"state": "missing"}
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeError) as exc:
+            raise HouseError("Could not read research record {}: {}".format(path, exc)) from exc
+        state = "template" if text == template else "edited"
+        current = status_line(text)
+        lines = text.splitlines()
+        result[relative] = {"state": state, "status": current,
+                            "stale": state == "edited" and (initial in lines or MIGRATED_STATUS in lines)}
+    return result

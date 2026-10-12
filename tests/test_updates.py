@@ -12,6 +12,7 @@ from urllib.request import Request
 from house_engine.project import ROOMS, bootstrap, init_project
 from house_engine.storage import HouseError, atomic_json, read_json
 from house_engine import updates
+from house_engine import __version__ as VERSION
 
 
 COMMIT = "a" * 40
@@ -126,7 +127,7 @@ class UpdateTests(unittest.TestCase):
         self.assertEqual(stage["room"], "literature")
         self.assertEqual(set(stage["files"]), {"SKILL.md", "references/guide.md"})
         self.assertEqual((Path(stage["path"]) / "SKILL.md").read_bytes(), SKILL)
-        self.assertEqual(read_json(self.home / "shared/config.json")["current_release"], "0.1.0")
+        self.assertEqual(read_json(self.home / "shared/config.json")["current_release"], VERSION)
 
     def test_archive_download_uses_api_at_resolved_commit(self):
         with patch.object(updates, "_request", side_effect=self.network) as request:
@@ -270,7 +271,7 @@ class UpdateTests(unittest.TestCase):
         self.review(stage)
         result = updates.apply_stage(self.home, stage["stage_id"])
         self.assertEqual(result["status"], "applied")
-        self.assertNotEqual(result["release"], "0.1.0")
+        self.assertNotEqual(result["release"], VERSION)
         self.assertEqual((root / "hive.lock.json").read_bytes(), old_lock)
         manifest = read_json(self.home / "shared/releases" / result["release"] / "manifest.json")
         self.assertEqual(manifest["bindings"]["literature"][0]["commit"], COMMIT)
@@ -339,11 +340,11 @@ class UpdateTests(unittest.TestCase):
         self.assertEqual((root / "literature/ROOM.md").read_text(), "User room edits")
         self.assertEqual((root / "main/decisions.md").read_text(), "User decisions")
         pinned = (root / "hive.lock.json").read_bytes()
-        result = updates.rollback(self.home, "0.1.0")
-        self.assertEqual(result["release"], "0.1.0")
+        result = updates.rollback(self.home, VERSION)
+        self.assertEqual(result["release"], VERSION)
         self.assertEqual((root / "hive.lock.json").read_bytes(), pinned)
         count = len(self.notifications())
-        self.assertEqual(updates.rollback(self.home, "0.1.0")["status"], "unchanged")
+        self.assertEqual(updates.rollback(self.home, VERSION)["status"], "unchanged")
         self.assertEqual(len(self.notifications()), count)
         with self.assertRaises(HouseError):
             updates.pin_project(root, release, " ")
@@ -353,8 +354,8 @@ class UpdateTests(unittest.TestCase):
         self.review(stage)
         release = updates.apply_stage(self.home, stage["stage_id"])["release"]
         (self.home / "shared/releases" / release / "rooms/main/ROOM.md").write_text("damaged current guide")
-        self.assertEqual(updates.rollback(self.home, "0.1.0")["status"], "rolled_back")
-        self.assertEqual(read_json(self.home / "shared/config.json")["current_release"], "0.1.0")
+        self.assertEqual(updates.rollback(self.home, VERSION)["status"], "rolled_back")
+        self.assertEqual(read_json(self.home / "shared/config.json")["current_release"], VERSION)
 
     def test_credentials_are_api_only_and_removed_on_cross_host_redirect(self):
         calls = []

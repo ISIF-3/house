@@ -13,10 +13,12 @@ import subprocess
 import sys
 import uuid
 
+from . import __version__
 from .project import ROOMS, _release, bootstrap, default_home, find_house, init_project, status
 from .storage import HouseError, atomic_json, locked, read_json, safe_path
 
-VERSION = '0.1.0'
+VERSION = __version__
+MB = 1024 * 1024
 ROOM_LABELS = {'main': '목표·설계·전체 흐름', 'literature': '문헌·원문·추출',
                'work': '구현·실험', 'output': '결과·검증', 'discussion': 'Council·개선안'}
 
@@ -75,6 +77,32 @@ def parser():
     common(pin, sub=True)
     pin.add_argument('release')
     pin.add_argument('--reason', required=True)
+    check = sub.add_parser('check', help='크기·git·상태 줄·handoff·옮긴 원본 점검 (변경 없음)')
+    common(check, sub=True)
+    check.add_argument('--dir-mb', type=float, default=100, help='옮길 후보 폴더 기준 크기 (MB)')
+    check.add_argument('--file-mb', type=float, default=10, help='큰 파일 기준 크기 (MB)')
+    for name, help_text in [('track', 'house/ 기록의 git 추적 시작 (필요하면 house/에 저장소 생성)'),
+                            ('save', 'house/ 기록만 git에 커밋')]:
+        s = sub.add_parser(name, help=help_text)
+        common(s, sub=True)
+        s.add_argument('-m', '--message', required=name == 'save',
+                       default='house: 연구 기록 추적 시작' if name == 'track' else None)
+        s.add_argument('--max-file-mb', type=float, default=10, help='커밋할 파일 하나의 최대 크기 (MB)')
+        s.add_argument('--max-total-mb', type=float, default=200, help='한 번에 추가할 최대 합계 (MB)')
+        s.add_argument('--max-files', type=int, default=5000, help='한 번에 추가할 최대 파일 수')
+    offload = sub.add_parser('offload', help='원본 데이터 폴더를 house/ 밖(../house-data/)으로 옮기고 링크 남기기')
+    common(offload, sub=True)
+    offload.add_argument('path', nargs='?', help='옮길 house/ 안의 파일이나 폴더')
+    offload.add_argument('--suggested', action='store_true', help='house check의 옮길 후보를 모두 처리')
+    offload.add_argument('--allow-recent', action='store_true', help='최근 30분 안에 바뀐 파일이 있어도 옮김')
+    offload.add_argument('--to', type=Path, help='원본 데이터 위치 (기본: 프로젝트의 house-data/)')
+    offload.add_argument('--no-link', action='store_true', help='원래 자리에 링크를 남기지 않음')
+    offload.add_argument('--hash', action='store_true', help='파일별 SHA-256도 기록 (큰 데이터는 느림)')
+    offload.add_argument('--allow-records', action='store_true', help='.md 기록이 들어 있어도 옮김')
+    migrate = sub.add_parser('migrate', help='이 프로젝트를 새 House 구조로 전환 (바꾼 파일은 백업)')
+    common(migrate, sub=True)
+    migrate.add_argument('--release', help='전환할 공용 버전 (기본: 현재 엔진 버전)')
+    migrate.add_argument('--reason', help='hive.lock.json history에 남길 이유')
     return p
 
 
@@ -117,6 +145,9 @@ def context(root, room):
         '설계: ' + str(root / 'main/design.md'),
         '결정: ' + str(root / 'main/decisions.md'),
         '진행: ' + str(root / 'main/work.md'),
+        '인계(현재 상태): ' + str(root / 'main/handoff.md'),
+        '기록 관리 명령: ' + shlex.join([sys.executable, str(Path(__file__).resolve().parents[1] / 'house.py')])
+        + ' check | save -m "<요약>" | offload <house 안 경로> (비대화형, 현재 채팅에서 실행 가능)',
         '사용할 고정 스킬: ' + json.dumps(skill_refs, ensure_ascii=False),
         '해당 방의 GUIDE.md가 있으면 함께 읽고 필요한 입력만 추가로 확인하세요.',
         'Main에서는 먼저 연구 필요성과 최종 목표를 정리하고 방법·데이터·검증 계획을 설명하세요.',
@@ -232,6 +263,38 @@ def update_context(home, report):
     return {'root': str(home), 'room': 'workshop', 'prompt': prompt, 'launched': False}
 
 
+def records_command(args, root, project):
+    from . import records
+    if args.command == 'check':
+        report = records.check(root, int(args.dir_mb * MB), int(args.file_mb * MB))
+        print(json.dumps(report, ensure_ascii=False, indent=2) if args.json else records.render_check(report))
+        return 0
+    if args.command in ('track', 'save'):
+        emit(records.commit(root, args.message, init=args.command == 'track', max_file=int(args.max_file_mb * MB),
+                            max_total=int(args.max_total_mb * MB), max_files=args.max_files,
+                            dry_run=args.dry_run), args.json)
+        return 0
+    if args.command == 'offload':
+        if args.suggested == bool(args.path):
+            raise HouseError('옮길 경로 하나 또는 --suggested 중 하나를 지정하세요.')
+        if args.suggested:
+            emit(records.offload_suggested(root, to=args.to, link=not args.no_link, content_hash=args.hash,
+                                           dry_run=args.dry_run), args.json)
+            return 0
+        emit(records.offload(root, args.path, to=args.to, link=not args.no_link, content_hash=args.hash,
+                             allow_records=args.allow_records, dry_run=args.dry_run, cwd=project,
+                             allow_recent=args.allow_recent), args.json)
+        return 0
+    value = records.migrate(root, release=args.release, reason=args.reason, dry_run=args.dry_run)
+    if args.json:
+        emit(value, True)
+    else:
+        print(value['report'])
+        if value.get('status') == 'migrated':
+            print('\n보고서: ' + str(Path(value['root']) / value['job'] / 'REPORT.md'))
+    return 0
+
+
 def main(argv=None):
     args = parser().parse_args(argv)
     try:
@@ -275,6 +338,8 @@ def main(argv=None):
             from .updates import pin_project
             emit(pin_project(resolve_root(project), args.release, args.reason), args.json)
             return 0
+        if command in ('check', 'track', 'save', 'offload', 'migrate'):
+            return records_command(args, resolve_root(project), project)
         initialized = init_project(project, home, goal=getattr(args, 'goal', None))
         root = Path(initialized['root'])
         if command == 'init':
