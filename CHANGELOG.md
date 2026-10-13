@@ -1,5 +1,10 @@
 # 변경 기록
 
+## 0.2.1 · 2026-10-13
+
+- 토큰 절약 규칙: 세션 시작 때 `main/handoff.md`만 먼저 읽고, 다른 기록·보관·output 상세는 필요할 때만 연다. 보고는 짧게, 부가 산출물은 요청 시에만.
+- `house check`가 20,000자를 넘는 main 기록(work·decisions·target·design)을 알리고 `main/archive/<날짜>/`로 옮기도록 권한다.
+
 ## 0.2.0 · 2026-10-12
 
 - 문서 상태 줄을 `<!-- house:status -->`로 표시하고, 내용이 생겼는데 초기 문구가 남은 문서를 `house status`/`house check`에서 감지.

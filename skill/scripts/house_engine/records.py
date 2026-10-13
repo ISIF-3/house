@@ -19,7 +19,7 @@ import uuid
 from . import __version__
 from .project import ROOMS, _lock, _release, _root, base_version, bootstrap, document_status
 from .storage import HouseError, atomic_json, locked, read_json, safe_path
-from .templates import HANDOFF_LIMIT, LEGACY_PLACEHOLDERS, MIGRATED_STATUS, STATUS_MARK, status_line
+from .templates import HANDOFF_LIMIT, LEGACY_PLACEHOLDERS, MIGRATED_STATUS, RECORD_LIMIT, STATUS_MARK, status_line
 
 MB = 1024 * 1024
 RECENT_SECONDS = 30 * 60
@@ -442,6 +442,14 @@ def check(root, dir_threshold=100 * MB, file_threshold=10 * MB):
     if handoff_chars > HANDOFF_LIMIT:
         advice.append("main/handoff.md가 {}자입니다. 현재 상태 스냅샷으로 다시 써서 {}자 이내로 줄이세요.".format(
             handoff_chars, HANDOFF_LIMIT))
+    large = {}
+    for name in ('work', 'decisions', 'target', 'design'):
+        path = safe_path(root, 'main/' + name + '.md')
+        if path.is_file() and len(path.read_text(encoding='utf-8')) > RECORD_LIMIT:
+            large['main/' + name + '.md'] = len(path.read_text(encoding='utf-8'))
+    if large:
+        advice.append("길어진 기록 {}: 지난 내용을 main/archive/<날짜>/로 옮기고 현재 요약만 남기세요 (기준 {}자).".format(
+            ", ".join("{} {}자".format(k, v) for k, v in large.items()), RECORD_LIMIT))
     if offloaded["problems"]:
         advice.append("옮긴 원본 데이터에 문제가 있습니다: {}건".format(len(offloaded["problems"])))
     return {"root": str(root), "release": lock["release"], "engine": __version__,
@@ -451,7 +459,7 @@ def check(root, dir_threshold=100 * MB, file_threshold=10 * MB):
             "large_files": sorted(large_files, key=lambda item: -item["bytes"])[:30],
             "git": git, "stale_status": stale, "template_notes": notes,
             "handoff": {"chars": handoff_chars, "limit": HANDOFF_LIMIT, "over": handoff_chars > HANDOFF_LIMIT},
-            "offloaded": offloaded, "advice": advice}
+            "large_records": large, "offloaded": offloaded, "advice": advice}
 
 
 def render_check(report):

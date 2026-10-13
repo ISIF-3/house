@@ -7,6 +7,8 @@ STATUS_MARK = "<!-- house:status -->"
 # Written by `house migrate` where an older initial line remained in a written record.
 MIGRATED_STATUS = "상태: 기록 있음 — 다음 작업에서 현재 상태로 갱신 필요 " + STATUS_MARK
 HANDOFF_LIMIT = 8000
+# Records read on demand stay short; older content moves to main/archive/<date>/.
+RECORD_LIMIT = 20000
 
 COMMON = """\n## 공통 원칙
 - 상위 HOUSE.md, AGENTS.md와 hive.lock.json을 먼저 읽는다. 실행 중인 프로젝트는 고정된 릴리스를 따른다.
@@ -22,12 +24,15 @@ COMMON = """\n## 공통 원칙
 - 원본·대용량 데이터(체크포인트, 단계별 배열, 대량 로그)는 house/ 밖에 둔다. house/ 안에 생긴 원본 폴더는 `house offload <경로>`로
   ../house-data/에 옮기고 결과 문서에는 요약·작은 그림·원본 위치를 남긴다. 실행 중인 계산의 출력 폴더는 옮기지 않는다.
 - 작업을 마치면 handoff를 갱신하고, house/가 git으로 추적되면 `house save -m '<요약>'`으로 기록을 커밋한다.
+- 세션 시작 때는 main/handoff.md만 먼저 읽는다. 다른 main 문서는 필요할 때만, main/archive/와 output 상세 문서는 과거 근거가 꼭 필요할 때만 연다.
+- 보고는 짧게 한다. 노트북·HTML·흐름도·브라우저 검사 같은 부가 산출물은 요청이 있을 때만 만든다.
+- main의 work·decisions·target·design이 20,000자를 넘으면 지난 내용을 main/archive/<날짜>/로 옮기고 현재 요약만 남긴다.
 """
 
 ROOM_INSTRUCTIONS = {
     "main": """# Main — 연구의 이유와 설계
 
-먼저 handoff.md, why.md와 target.md를 읽고 왜 이 연구가 필요한지, 어떤 질문에 답할지 사용자와 대화한다.
+먼저 handoff.md를 읽고, 필요하면 why.md와 target.md를 열어 왜 이 연구가 필요한지, 어떤 질문에 답할지 사용자와 대화한다.
 목표, 평가 기준, 데이터 사용 범위, 비교 기준과 제약을 정리한다. reference.md는 근거 탐색의 길잡이다.
 design.md와 method.md에 연구 설계와 방법을 제안하고, decisions.md에 사용자의 실제 동의와 변경 이유를 기록한다.
 질문을 한 번에 과도하게 묶지 않는다. 미확정 항목은 미확정으로 남긴다.
@@ -90,7 +95,8 @@ house-data.json은 house/ 밖으로 옮긴 원본의 위치·크기·목록 해�
     "AGENTS.md": """# House 내부 작업 지침
 
 이 지침은 이 house/ 범위에만 적용한다. 상위 프로젝트의 사용자 지침도 따른다.
-HOUSE.md, hive.lock.json, 선택한 방의 ROOM.md와 main/{handoff,why,target,design,decisions,work}.md를 읽는다.
+HOUSE.md, hive.lock.json, 선택한 방의 ROOM.md와 main/handoff.md만 먼저 읽는다. 나머지 main 문서는 필요할 때만, main/archive/와 output 상세 문서는 과거 근거가 꼭 필요할 때만 연다.
+보고는 짧게, 노트북·HTML·흐름도·브라우저 검사는 요청이 있을 때만 만든다.
 연구 이유와 목표를 사용자와 확인하고, 설계 합의를 기록한 뒤 구현·통계 분석·AI 모델 실행을 진행한다.
 승인·인용·데이터·실행·결과를 만들어내지 않는다. 기존 사용자 문서와 공유 릴리스는 덮어쓰지 않는다.
 예외: `<!-- house:status -->` 줄은 현재 상태로 바꿔 쓰고, main/handoff.md는 작업 종료 때 현재 상태 스냅샷으로 다시 쓴다.

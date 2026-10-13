@@ -140,12 +140,10 @@ def context(root, room):
         '고정 운영 버전: ' + pin['release'],
         '먼저 읽을 지침: ' + str(root / 'AGENTS.md'),
         '공용 방 지침: ' + str(guide),
-        '연구 필요성: ' + str(root / 'main/why.md'),
-        '목표: ' + str(root / 'main/target.md'),
-        '설계: ' + str(root / 'main/design.md'),
-        '결정: ' + str(root / 'main/decisions.md'),
-        '진행: ' + str(root / 'main/work.md'),
-        '인계(현재 상태): ' + str(root / 'main/handoff.md'),
+        '먼저 읽을 현재 상태: ' + str(root / 'main/handoff.md'),
+        '필요할 때만 여는 기록: ' + ', '.join(str(root / ('main/' + name + '.md'))
+                                         for name in ('why', 'target', 'design', 'decisions', 'work')),
+        '보고는 짧게 하고, 노트북·HTML·흐름도·브라우저 검사는 요청이 있을 때만 만드세요.',
         '기록 관리 명령: ' + shlex.join([sys.executable, str(Path(__file__).resolve().parents[1] / 'house.py')])
         + ' check | save -m "<요약>" | offload <house 안 경로> (비대화형, 현재 채팅에서 실행 가능)',
         '사용할 고정 스킬: ' + json.dumps(skill_refs, ensure_ascii=False),

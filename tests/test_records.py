@@ -117,6 +117,16 @@ class RecordTests(unittest.TestCase):
         atomic_json(self.home / 'shared/config.json', config)
         self.assertEqual(bootstrap(self.home)['current_release'], '0.1.0-u1')
 
+    def test_lean_reading_rules_and_large_record_advice(self):
+        root = self.init()
+        self.assertIn('main/handoff.md만 먼저 읽는다', (root / 'AGENTS.md').read_text())
+        self.assertIn('main/archive/', (root / 'main/ROOM.md').read_text())
+        work = root / 'main/work.md'
+        work.write_text(work.read_text() + '긴 기록\n' * 4000)
+        report = records.check(root)
+        self.assertIn('main/work.md', report['large_records'])
+        self.assertTrue(any('main/archive/' in item for item in report['advice']))
+
     # ------------------------------------------------------------ migration
 
     def used_legacy_project(self):

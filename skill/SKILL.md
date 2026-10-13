@@ -33,7 +33,7 @@ Resolve `scripts/house.py` relative to this SKILL.md. It uses Python 3.9+ and th
    python3 <skill-directory>/scripts/house.py context main --project <project-directory> --json
    ```
 
-   Substitute the selected room for `main`. Read `main/handoff.md` first, then the returned room guide, Main records and the listed **pinned** skill files. Do not replace the project's locked release with the newest shared default. If a pinned file is missing or changed, repair that specific issue before using it.
+   Substitute the selected room for `main`. Read `main/handoff.md` first, then the returned room guide and the listed **pinned** skill files. Open other Main records only when the task needs them, and `main/archive/` or detailed output documents only when historical evidence is required. Keep reports short; create notebooks, HTML, diagrams or browser checks only when asked. Do not replace the project's locked release with the newest shared default. If a pinned file is missing or changed, repair that specific issue before using it.
 
    For an existing project, also run `python3 <skill-directory>/scripts/house.py check --project <project-directory>`. If it reports an older release, explain what `migrate` changes (House-owned files and status lines only, with backups in `main/jobs/`) and run it only after the user agrees.
 
