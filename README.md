@@ -65,7 +65,8 @@ Main은 연구의 이유·최종 목표를 정리하고 데이터, 방법, 평�
     │   ├── why.md / target.md / design.md
     │   ├── method.md / reference.md / results.md
     │   ├── decisions.md / work.md / handoff.md
-    │   └── designs/ / jobs/
+    │   ├── designs/ / jobs/
+    │   └── sessions/<native-chat-id>/  채팅별 인계·작업 기록 (모든 방 공통)
     ├── literature/
     │   ├── GUIDE.md / reference.md
     │   └── reference/ / extract/
@@ -81,9 +82,34 @@ Main은 연구의 이유·최종 목표를 정리하고 데이터, 방법, 평�
 
 모든 방에는 `ROOM.md`가 있습니다. 모델 작업을 실제로 시작하면 `work/model_v1.ipynb`와 `model_v1.md`를 만들고, 실행별 결과는 `output/model_v1/run-001/`의 `figure/`, `output/`, `results.md`, `run.json`으로 연결합니다. Discussion은 `council-model_v1.md` 등에 문헌·구현·결과를 근거로 개선안을 기록하며, Main이 결정한 후 다음 버전에 반영합니다.
 
-Main은 필요한 방에 입력 파일·목표·산출물 경로를 지정해 작업을 맡깁니다. Codex에서 subagent가 가능하면 한정된 일을 위임하고, 진행 상태와 인계는 MD에 남깁니다. 터미널 메뉴는 선택한 방의 Codex를 여는 진입점입니다. 항상 작동하는 자율 에이전트 군집이나 별도 채팅 생성 서비스는 아닙니다.
+Main은 literature·work·output·discussion에 각 한 명의 담당 에이전트를 두고, 필요한 방부터 작업을 맡깁니다. 같은 방의 후속 작업은 기존 ID로 보내고 필요하면 재개합니다. CLI 실행에 주입하는 역할 설정과 훅은 기본 worker/explorer, 작업마다 새 에이전트 생성, 하위 에이전트의 재귀 생성을 거부합니다. 목표·입력 파일·허용 산출물·완료 기준을 지정하고 공유 기록의 작성자를 한 명으로 정합니다.
+
+생성 결과 훅이 누락되면 같은 native 호출의 저장된 결과에서 ID나 확인된 실패를 복구합니다. 식별할 수 없는 결과는 예약을 유지하므로 `/subagents`에서 확인합니다. 시간이 지났다는 이유로 새 에이전트를 만들지는 않습니다.
+
+주 CLI에서 대화하고 `/subagents`로 자식 작업을 봅니다. 방 에이전트의 기록과 작업은 `<room>/sessions/<main-chat-id>/agents/<agent-id>/`에 둡니다. 별도 터미널의 `house sessions --watch`는 주 CLI 세션의 기록된 상태를 읽어 보여 주며, 자식 작업은 `/subagents`에서 확인합니다. 터미널 다섯 개를 자동으로 열거나 항상 실행되는 방별 서비스를 만들지는 않습니다.
 
 Finder나 VS Code에서 해당 프로젝트의 `house` 폴더를 열어 두면 실제 생성·수정되는 파일을 볼 수 있습니다. 기존 연구를 완료 상태로 임의 분류하거나 이동하는 기능은 수행하지 않습니다.
+
+## 채팅별 작업과 인계 (0.3.0)
+
+`house start`·`house room`은 기존처럼 해당 방을 `--cd`로 지정해 Codex를 foreground에서 실행합니다. 실행별 `-c` 설정으로 native hooks와 방 역할을 연결하며 전역 Codex 설정 파일은 바꾸지 않습니다. 훅은 Codex의 신뢰 검토를 따릅니다. 자동 기록은 이 CLI 연동으로 시작한 채팅에 적용되며, 앱에서 `$house`만 호출한 채팅에 훅이 설치됐다고 간주하지 않습니다. [공식 Hooks 문서](https://learn.chatgpt.com/docs/hooks)
+
+`SessionStart`는 `house/<room>/sessions/<native-chat-id>/`에 `SESSION.md`, `handoff.md`, `session.json`, `events.jsonl`, `work/`를 만듭니다. 같은 native ID의 resume·compact는 같은 폴더와 관측 누계를 이어 씁니다. 폴더는 공유 연구 트리 안의 메모·작업 공간이며, 격리된 git worktree나 계산 체크포인트가 아닙니다.
+
+문맥 **70% 이상**을 최근 관측하면 인계 준비를 안내합니다. 비율은 마지막 `token_count`의 `last_token_usage.total_tokens / model_context_window`이며 누적 청구 토큰을 쓰지 않습니다. transcript는 비안정 형식의 보조 인터페이스라 최대 2MiB만 읽고, 정보가 없으면 `unknown`으로 표시합니다. 이 값은 실시간 점유율이나 Codex UI와의 일치를 보장하지 않으며, 설치된 0.154.0의 실제 세션 형식은 실측 검증하지 못했습니다.
+
+자동 압축은 완료된 `PostCompact`의 `trigger=auto`만 셉니다. 수동 압축은 10회 기준에서 제외하며, 중간에 연동한 기존 채팅은 관측 시작 이후 횟수만 압니다. 이벤트를 식별할 수 없는 중복 전달은 중복 집계될 수 있습니다. 70%와 10회는 House 운영 기준이며 모델 품질의 공식 임계치가 아닙니다.
+
+인계 파일은 **목표·확정 결정·실행 중인 작업·다음 행동** 네 제목 아래 실제 내용을 적고 전체 8,000자 이내로 유지합니다. 작성 후 checkpoint 명령으로 검증한 복사본을 `snapshots/`에 보관합니다. Main은 `main/handoff.md`도 갱신하고, 새 채팅은 이 파일과 같은 방의 최근 저장 snapshot을 읽습니다.
+
+```sh
+house sessions --room main          # 읽기 전용; --json으로 구조화 출력
+house sessions --watch              # 읽기 전용; Ctrl-C는 상태 보기만 종료
+house session checkpoint CHAT_ID --room main --project /path/to/research-project
+house session checkpoint CHAT_ID --room main --boundary --project /path/to/research-project
+```
+
+`CHAT_ID`는 시작 훅이 알려 준 실제 native ID를 사용합니다. `--boundary`는 실제 작업 구간을 마쳤을 때만 붙입니다. 자동 압축 10회 이상이며 인계를 저장한 작업 경계에서 한 번 새 채팅을 권합니다. 단순 응답 종료나 `Stop`으로 자동 종료하지 않고, 실행 중인 계산을 중단하거나 새 채팅을 자동 생성하지 않습니다. `house session hook --room ROOM`은 CLI가 연결하는 native hook JSON 입력용입니다.
 
 ## 기록을 가볍게 유지하기 (0.2.0)
 
@@ -102,7 +128,7 @@ house save -m 'model_v1 run-002 결과 정리'      # house/ 기록만 커밋
 
 ## 이전 버전 프로젝트 업그레이드
 
-0.2.0 엔진을 처음 실행하면 공용 기본값이 0.2.0으로 한 번 바뀝니다. 기본값에 검토된 외부 스킬이 연결되어 있거나 이후 `rollback`한 경우에는 바꾸지 않습니다. 기존 프로젝트는 고정 버전을 유지하며, 프로젝트별로 아래 순서를 따릅니다.
+0.3.0 엔진을 처음 실행하면 외부 스킬 연결이 없는 이전 공용 기본값을 한 번 갱신합니다. 기본값에 검토된 외부 스킬이 연결되어 있거나 이후 `rollback`한 경우에는 바꾸지 않습니다. 기존 프로젝트는 고정 버전을 유지하며 강제로 migrate하지 않습니다. CLI 세션 운영 정책은 실행 중인 현재 엔진이 적용하고, 방의 연구 지침은 프로젝트가 고정한 릴리스를 유지합니다. 프로젝트별 구조 전환은 아래 순서를 따릅니다.
 
 ```sh
 cd /path/to/research-project

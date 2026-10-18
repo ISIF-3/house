@@ -26,6 +26,13 @@ COMMON = """\n## 공통 원칙
 - 작업을 마치면 handoff를 갱신하고, house/가 git으로 추적되면 `house save -m '<요약>'`으로 기록을 커밋한다.
 - 세션 시작 때는 main/handoff.md만 먼저 읽는다. 다른 main 문서는 필요할 때만, main/archive/와 output 상세 문서는 과거 근거가 꼭 필요할 때만 연다.
 - 보고는 짧게 한다. 노트북·HTML·흐름도·브라우저 검사 같은 부가 산출물은 요청이 있을 때만 만든다.
+- CLI의 세션 작업 폴더는 각 방의 sessions/<chat-id>/다. SESSION.md에 진행과 산출물 경로를 남기고,
+  handoff.md에는 목표·확정 결정·실행 중인 작업·다음 행동을 기록한다. 실제 작업 구간 종료 때
+  시작 훅이 알려 준 `house session checkpoint <chat-id> --room <방> --boundary`로 인계를 보관한다.
+- 컨텍스트 약 70%에서 인계를 준비하고 자동 압축마다 위 네 항목을 실제 파일·실행 상태와 재확인한다.
+  자동 압축 10회 이상이면 저장된 작업 구간 종료에서만 새 채팅을 권장한다. 계산이나 채팅을 자동 종료하지 않는다.
+- Main만 literature/work/output/discussion의 고정 역할에 방마다 한 번 위임한다. 후속 작업은 기존 agent ID에
+  send_input/resume_agent로 전달한다. 작업마다 새 에이전트를 만들지 않고 하위 방은 재귀 위임하지 않는다.
 - main의 work·decisions·target·design이 20,000자를 넘으면 지난 내용을 main/archive/<날짜>/로 옮기고 현재 요약만 남긴다.
 """
 
@@ -100,6 +107,8 @@ HOUSE.md, hive.lock.json, 선택한 방의 ROOM.md와 main/handoff.md만 먼저 
 연구 이유와 목표를 사용자와 확인하고, 설계 합의를 기록한 뒤 구현·통계 분석·AI 모델 실행을 진행한다.
 승인·인용·데이터·실행·결과를 만들어내지 않는다. 기존 사용자 문서와 공유 릴리스는 덮어쓰지 않는다.
 예외: `<!-- house:status -->` 줄은 현재 상태로 바꿔 쓰고, main/handoff.md는 작업 종료 때 현재 상태 스냅샷으로 다시 쓴다.
+CLI의 세션 작업 폴더와 인계는 선택한 방의 sessions/<chat-id>/에 둔다. 자동 압축마다 현재 상태를 재확인하고,
+10회 이상인 실제 작업 구간 종료에서 인계를 저장한 뒤 새 채팅을 권장한다. Main은 방별 고정 에이전트를 재사용하며 재귀 위임하지 않는다.
 근거는 출처와 파일 경로로 연결한다. Discussion의 제안은 Main의 결정을 거친다.
 작업 진행은 main/work.md 아래에 날짜별로 추가한다. 모델 노트북과 설명 MD를 버전별로 함께 관리하고 결과는 output/<version>/<run>/에 둔다.
 원본·대용량 출력은 house/ 밖에 두고 위치·크기·해시만 기록한다. 실행 중인 계산의 출력 폴더는 옮기지 않는다.

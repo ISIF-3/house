@@ -1,3 +1,3 @@
 """House research workspace engine (Python standard library only)."""
 
-__version__ = "0.2.1"
+__version__ = "0.3.0"

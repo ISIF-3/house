@@ -33,7 +33,7 @@ Resolve `scripts/house.py` relative to this SKILL.md. It uses Python 3.9+ and th
    python3 <skill-directory>/scripts/house.py context main --project <project-directory> --json
    ```
 
-   Substitute the selected room for `main`. Read `main/handoff.md` first, then the returned room guide and the listed **pinned** skill files. Open other Main records only when the task needs them, and `main/archive/` or detailed output documents only when historical evidence is required. Keep reports short; create notebooks, HTML, diagrams or browser checks only when asked. Do not replace the project's locked release with the newest shared default. If a pinned file is missing or changed, repair that specific issue before using it.
+   Substitute the selected room for `main`. Read `main/handoff.md` first, then any same-room saved snapshot path supplied by the CLI start hook, the returned room guide and the listed **pinned** skill files. Open other Main records only when the task needs them, and `main/archive/` or detailed output documents only when historical evidence is required. Keep reports short; create notebooks, HTML, diagrams or browser checks only when asked. Do not replace the project's locked release with the newest shared default. The current engine supplies CLI session operating policy; the project's pinned room guidance remains in force. If a pinned file is missing or changed, repair that specific issue before using it.
 
    For an existing project, also run `python3 <skill-directory>/scripts/house.py check --project <project-directory>`. If it reports an older release, explain what `migrate` changes (House-owned files and status lines only, with backups in `main/jobs/`) and run it only after the user agrees.
 
@@ -53,9 +53,21 @@ Resolve `scripts/house.py` relative to this SKILL.md. It uses Python 3.9+ and th
 
 4. Ask for the next missing research decision at an appropriate level, rather than requesting all fields at once. For actual AI/statistical model development, explain the target, data, baseline, candidate methods, validation and resources, then establish design agreement before implementation. An approved House architecture is not approval of a particular research model.
 
-5. Continue the authorized work in the appropriate rooms using [room conventions](references/rooms.md). Where available and useful, Main can delegate bounded tasks to subagents, passing the room guide, goal, input paths, allowed output paths and completion criteria. Keep the durable progress and handoff in the project. Do not claim a permanent background worker or inter-chat link exists.
+5. Continue the authorized work using [room conventions](references/rooms.md). Main uses at most one reusable subagent for each of literature, work, output and discussion. Pass the room guide, goal, input paths, allowed output paths and completion criteria; send follow-ups to the existing ID and resume it when needed. Do not create per-task workers or recursive subagents. Keep durable progress and handoff in the project.
 
 **Do not run interactive `house`, `house start`, or `house room` inside this chat.** Those commands launch another Codex terminal session. The `init` and `context` commands let this conversation remain the active Main or room.
+
+## Native CLI sessions
+
+The `house start` / `house room` launcher injects invocation-scoped native hooks and room roles; it does not change global Codex config or bypass native hook trust review. Calling `$house` in an existing app chat does not attach those automatic hooks. Do not claim automatic session tracking without that CLI integration. The CLI keeps the room's `--cd` and foreground interaction; `/subagents` shows child work, and a separate terminal can run read-only `house sessions --watch` (or `--room ROOM`, `--json`). It does not open five terminals.
+
+Follow the start hook's actual native chat ID and paths under `<house>/<room>/sessions/<id>/`. Resume and compaction keep that ID's workspace and observed counts. Write the session's `handoff.md` with actual content under `## 목표`, `## 확정 결정`, `## 실행 중인 작업`, `## 다음 행동`, at most 8,000 characters in total. Main also maintains `main/handoff.md`. Save a validated snapshot with:
+
+```text
+python3 <skill-directory>/scripts/house.py session checkpoint <native-chat-id> --room <room> --project <project-directory>
+```
+
+Add `--boundary` only after a real work segment is finished, not at every response. At 70% recent context observation, prepare the handoff. After at least 10 completed automatic compactions, a saved boundary checkpoint recommends a new chat once. Never end the chat, stop a running computation or create a replacement chat merely because a counter reached 10. See [session details and observation limits](references/rooms.md#continue-after-interruption).
 
 ## Keep the records light
 
@@ -73,4 +85,4 @@ Results keep only summaries, small figures and tables, and the raw location, siz
 
 State where the project lives, what was written, what was actually executed and the next unresolved decision. Update the handoff and, if tracked, `save` before ending. Keep facts, interpretations, proposals and accepted decisions distinct. Literature needs traceable sources; experiment results need an executed version and run ID. Never infer successful research from a subprocess exit or an empty output folder.
 
-The terminal application currently opens one selected Codex room at a time. It stores launch records and prevents overlapping launches of the same room. An always-running multi-room service and an enabled weekly scheduler are not implied by these commands.
+The terminal application opens one selected foreground Codex room and prevents overlapping launches of that room. Main can coordinate its four reusable room agents. Session workspaces share the research tree; they are neither isolated git worktrees nor computation checkpoints. An always-running multi-room service and an enabled weekly scheduler are not implied.
