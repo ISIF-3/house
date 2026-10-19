@@ -142,6 +142,21 @@ class CLITests(unittest.TestCase):
         self.assertFalse((self.project / '.codex').exists())
         self.assertFalse((self.project / 'house/main/sessions').exists())
 
+    def test_web_dry_run_uses_native_app_server_without_starting_it(self):
+        result = self.run_house('web', '--dry-run', '--json', '--port', '0', '--no-browser', '--goal', 'Compare A')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        value = json.loads(result.stdout)
+        self.assertEqual(value['mode'], 'web')
+        self.assertEqual(value['host'], '127.0.0.1')
+        self.assertEqual(value['argv'][1:4], ['app-server', '--listen', 'stdio://'])
+        self.assertTrue(any('hooks.PreToolUse=' in flag for flag in value['argv']))
+        self.assertFalse((self.project / 'house/main/sessions').exists())
+
+    def test_web_rejects_invalid_port(self):
+        result = self.run_house('web', '--dry-run', '--json', '--port', '99999')
+        self.assertEqual(result.returncode, 2)
+        self.assertIn('포트', result.stderr)
+
     def test_hook_creates_native_session_folder_and_listing_is_read_only(self):
         self.assertEqual(self.run_house('init').returncode, 0)
         event = {'hook_event_name': 'SessionStart', 'source': 'startup',

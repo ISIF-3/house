@@ -24,11 +24,39 @@ house room literature         # 문헌 방에서 Codex 실행
 house init --goal '연구 목표'  # 폴더만 생성
 house status                  # 기록된 상태 확인
 house check                   # 크기·git·상태 줄·handoff 점검 (변경 없음)
+house web                     # 로컬 웹 연구실을 열고 브라우저에서 작업
 ```
 
 Codex 앱·CLI·확장에서 프로젝트를 열고 **`$house 연구 목표를 정리하며 시작해줘`**라고 요청할 수도 있습니다. `/house`는 기본 슬래시 명령으로 등록되지 않습니다. 새 스킬이 보이지 않으면 Codex를 다시 열고 스킬 목록을 확인합니다. [Codex 스킬 문서](https://learn.chatgpt.com/docs/build-skills)
 
 Main은 연구의 이유·최종 목표를 정리하고 데이터, 방법, 평가 기준과 자원을 설명합니다. 실제 AI·통계 모델 구현은 설계에 합의한 뒤 시작합니다. 초기화 시 가짜 노트북·논문·결과·승인을 만들지 않습니다.
+
+## 브라우저에서 운영하기 (0.4.0)
+
+CLI에서 실행하고 브라우저에서 Main과 네 방의 작업·대화·파일을 확인합니다. 없는 프로젝트 구조는 자동 초기화하며 기존 House의 고정 릴리스는 유지합니다. 별도 API 키를 요구하지 않고 기존 Codex CLI의 ChatGPT 로그인을 사용합니다.
+
+중앙 화면은 **작업 요청 → 연구실 둘러보기 → 선택한 방의 작업 결과 대화 → 확인과 승인** 순서입니다. 왼쪽에는 작업 보드와 세션 관측을 두며 연구 목표 본문과 Main ID는 표시하지 않습니다. 목표 기록은 프로젝트 파일에 보존됩니다.
+
+```sh
+house web --project /path/to/research
+house web --project /path/to/research --port 0 --no-browser
+house web --project /path/to/research --resume MAIN_CHAT_ID
+house web --project /path/to/research --dry-run --json
+```
+
+기본 주소는 `127.0.0.1:8765`이며 `--port 0`은 빈 포트를 고릅니다. `--no-browser`는 주소만 출력합니다. 출력된 인증 주소를 열면 토큰을 해당 탭의 `sessionStorage`에 보관하고 주소의 fragment를 지워 새로고침에도 인증을 유지합니다. API에는 Bearer 헤더로 보내며 query나 cookie에 넣지 않습니다. `--dry-run --json`은 프로젝트 초기화 후 실행 계획을 보여 주며 서버와 Codex는 실행하지 않습니다.
+
+첫 연결에 훅 신뢰 검토가 필요하면 아직 작업을 접수하지 않습니다. 웹에서 훅의 명령·해시를 확인하고 **이번 실행에 허용**하면, House가 소유한 Codex 프로세스를 채팅 생성 전에 다시 시작해 해당 실행의 신뢰를 확인합니다. 전역 설정을 바꾸거나 신뢰 검토를 우회하지 않습니다. 사용자가 비활성화한 필수 훅은 실행을 막으며 임의로 켜지 않습니다.
+
+어느 방에서 요청해도 Main을 거쳐 기존 담당자에게 전달합니다. 지시는 8,000자 이내, 전달 대기는 최대 20개입니다. 실행 중인 작업은 자동 중단하지 않고 다음 Main 턴에서 처리합니다. 대기열은 세션의 `web-queue.json`에 보관하며, 전달 확인이 끊긴 `delivery_unknown` 항목은 자동 재전송하지 않습니다. 기록과 실제 실행 상태를 확인한 뒤 후속 요청을 결정합니다.
+
+세션 관측에서 **Main 모델·추론 강도·속도 모드**를 선택합니다. 추론 강도는 Codex가 해당 모델에 제공하는 단계만 표시하고, 속도는 자동·표준·Fast 중 고릅니다. Fast는 모델이 지원할 때 선택할 수 있으며 사용량이 늘 수 있습니다. [공식 속도 안내](https://learn.chatgpt.com/docs/agent-configuration/speed)
+
+현재 관측된 Main 설정과 다음 요청에 사용할 선택을 구분하며, 요청을 보낼 때 세 설정을 대기열에 함께 저장합니다. 자동은 같은 모델의 관측 설정을 유지하거나 모델 기본값을 사용합니다. 모델을 바꾸면 지원되지 않는 추론 강도와 Fast 선택은 자동으로 돌아갑니다. 선택을 바꿔도 실행 중이거나 이미 대기 중인 요청과 기존 방 담당자의 설정은 유지됩니다. 모델 목록을 가져오지 못하면 새 선택은 사용할 수 없지만 관측된 기존 설정으로 작업할 수 있습니다. 이미 실행 중인 웹 서버에 이 변경을 적용하려면 작업 상태를 확인한 뒤 서버를 재시작하고, 이어갈 Main ID를 `--resume`으로 지정합니다.
+
+브라우저를 닫아도 작업은 계속됩니다. CLI의 **Ctrl-C**는 웹 서버와 House가 소유한 Codex 연결을 종료하며, 외부 계산을 종료하는 명령은 보내지 않습니다. 이어가려면 이 House에 기록된 Main의 native ID를 `--resume`에 지정합니다. 같은 채팅을 CLI와 웹에서 동시에 조작하는 기능은 제공하지 않습니다.
+
+웹은 Codex `app-server --listen stdio://`의 실제 이벤트를 표시합니다. 정보가 없거나 연결이 끊기면 `unknown`으로 다루고, 요청 접수·모델 응답·연구 완료를 구별합니다. 실험적 app-server를 사용하며 대규모·장기 운영은 검증하지 않았습니다. 자동 테스트 207개를 통과했습니다. Codex 0.154.0에서는 Work 담당 생성·동일 ID 재사용과 Chrome의 실제 연결·승인·응답·파일 열람·새로고침을, 0.163.0에서는 모델 목록과 Main 모델·추론 강도·Fast 변경 후 실제 응답 및 표준 모드 복귀를 확인했습니다. 새 배치와 모델 선택 UI는 Chrome의 테스트 HTTP API로 검증했고 전역 설정 파일의 해시는 동일했습니다. [검증 기록](docs/verification.md), [App Server 문서](https://learn.chatgpt.com/docs/app-server)
 
 ## 공용 공장과 연구 방
 
@@ -82,21 +110,21 @@ Main은 연구의 이유·최종 목표를 정리하고 데이터, 방법, 평�
 
 모든 방에는 `ROOM.md`가 있습니다. 모델 작업을 실제로 시작하면 `work/model_v1.ipynb`와 `model_v1.md`를 만들고, 실행별 결과는 `output/model_v1/run-001/`의 `figure/`, `output/`, `results.md`, `run.json`으로 연결합니다. Discussion은 `council-model_v1.md` 등에 문헌·구현·결과를 근거로 개선안을 기록하며, Main이 결정한 후 다음 버전에 반영합니다.
 
-Main은 literature·work·output·discussion에 각 한 명의 담당 에이전트를 두고, 필요한 방부터 작업을 맡깁니다. 같은 방의 후속 작업은 기존 ID로 보내고 필요하면 재개합니다. CLI 실행에 주입하는 역할 설정과 훅은 기본 worker/explorer, 작업마다 새 에이전트 생성, 하위 에이전트의 재귀 생성을 거부합니다. 목표·입력 파일·허용 산출물·완료 기준을 지정하고 공유 기록의 작성자를 한 명으로 정합니다.
+Main은 literature·work·output·discussion에 각 한 명의 담당 에이전트를 두고, 필요한 방부터 작업을 맡깁니다. 같은 방의 후속 작업은 기존 ID로 보내고 필요하면 재개합니다. 신뢰 검토를 통과한 생성 훅과 깊이 제한으로 기본 worker/explorer, 작업마다 새 에이전트 생성, 하위 에이전트의 재귀 생성을 제한합니다. 적용 방식은 [방 지침](skill/references/rooms.md)에 설명합니다. 목표·입력 파일·허용 산출물·완료 기준을 지정하고 공유 기록의 작성자를 한 명으로 정합니다.
 
 생성 결과 훅이 누락되면 같은 native 호출의 저장된 결과에서 ID나 확인된 실패를 복구합니다. 식별할 수 없는 결과는 예약을 유지하므로 `/subagents`에서 확인합니다. 시간이 지났다는 이유로 새 에이전트를 만들지는 않습니다.
 
-주 CLI에서 대화하고 `/subagents`로 자식 작업을 봅니다. 방 에이전트의 기록과 작업은 `<room>/sessions/<main-chat-id>/agents/<agent-id>/`에 둡니다. 별도 터미널의 `house sessions --watch`는 주 CLI 세션의 기록된 상태를 읽어 보여 주며, 자식 작업은 `/subagents`에서 확인합니다. 터미널 다섯 개를 자동으로 열거나 항상 실행되는 방별 서비스를 만들지는 않습니다.
+foreground CLI에서는 대화와 `/subagents`로, 웹에서는 고정된 다섯 자리를 눌러 작업을 봅니다. 방 에이전트의 기록과 작업은 `<room>/sessions/<main-chat-id>/agents/<agent-id>/`에 둡니다. 별도 터미널의 `house sessions --watch`는 기록된 세션 상태를 읽어 보여 줍니다. 터미널 다섯 개를 자동으로 열거나 항상 실행되는 방별 서비스를 만들지는 않습니다.
 
 Finder나 VS Code에서 해당 프로젝트의 `house` 폴더를 열어 두면 실제 생성·수정되는 파일을 볼 수 있습니다. 기존 연구를 완료 상태로 임의 분류하거나 이동하는 기능은 수행하지 않습니다.
 
 ## 채팅별 작업과 인계 (0.3.0)
 
-`house start`·`house room`은 기존처럼 해당 방을 `--cd`로 지정해 Codex를 foreground에서 실행합니다. 실행별 `-c` 설정으로 native hooks와 방 역할을 연결하며 전역 Codex 설정 파일은 바꾸지 않습니다. 훅은 Codex의 신뢰 검토를 따릅니다. 자동 기록은 이 CLI 연동으로 시작한 채팅에 적용되며, 앱에서 `$house`만 호출한 채팅에 훅이 설치됐다고 간주하지 않습니다. [공식 Hooks 문서](https://learn.chatgpt.com/docs/hooks)
+`house start`·`house room`은 기존처럼 해당 방을 `--cd`로 지정해 Codex를 foreground에서 실행합니다. 웹 모드도 실행별 `-c` 설정으로 native hooks와 방 역할을 연결하며 전역 Codex 설정 파일은 바꾸지 않습니다. 훅은 Codex의 신뢰 검토를 따릅니다. 자동 기록은 House CLI·웹 연동으로 시작한 채팅에 적용되며, 앱에서 `$house`만 호출한 채팅에 훅이 설치됐다고 간주하지 않습니다. [공식 Hooks 문서](https://learn.chatgpt.com/docs/hooks)
 
 `SessionStart`는 `house/<room>/sessions/<native-chat-id>/`에 `SESSION.md`, `handoff.md`, `session.json`, `events.jsonl`, `work/`를 만듭니다. 같은 native ID의 resume·compact는 같은 폴더와 관측 누계를 이어 씁니다. 폴더는 공유 연구 트리 안의 메모·작업 공간이며, 격리된 git worktree나 계산 체크포인트가 아닙니다.
 
-문맥 **70% 이상**을 최근 관측하면 인계 준비를 안내합니다. 비율은 마지막 `token_count`의 `last_token_usage.total_tokens / model_context_window`이며 누적 청구 토큰을 쓰지 않습니다. transcript는 비안정 형식의 보조 인터페이스라 최대 2MiB만 읽고, 정보가 없으면 `unknown`으로 표시합니다. 이 값은 실시간 점유율이나 Codex UI와의 일치를 보장하지 않으며, 설치된 0.154.0의 실제 세션 형식은 실측 검증하지 못했습니다.
+문맥 **70% 이상**을 최근 관측하면 인계 준비를 안내합니다. 비율은 마지막 `token_count`의 `last_token_usage.total_tokens / model_context_window`이며 누적 청구 토큰을 쓰지 않습니다. transcript는 비안정 형식의 보조 인터페이스라 최대 2MiB만 읽고, 정보가 없으면 `unknown`으로 표시합니다. 이 값은 실시간 점유율이나 Codex UI와의 일치를 보장하지 않습니다. 0.154.0에서 짧은 세션은 확인했지만 장기 세션과 반복 압축의 관측 완전성은 검증하지 않았습니다.
 
 자동 압축은 완료된 `PostCompact`의 `trigger=auto`만 셉니다. 수동 압축은 10회 기준에서 제외하며, 중간에 연동한 기존 채팅은 관측 시작 이후 횟수만 압니다. 이벤트를 식별할 수 없는 중복 전달은 중복 집계될 수 있습니다. 70%와 10회는 House 운영 기준이며 모델 품질의 공식 임계치가 아닙니다.
 
@@ -128,7 +156,7 @@ house save -m 'model_v1 run-002 결과 정리'      # house/ 기록만 커밋
 
 ## 이전 버전 프로젝트 업그레이드
 
-0.3.0 엔진을 처음 실행하면 외부 스킬 연결이 없는 이전 공용 기본값을 한 번 갱신합니다. 기본값에 검토된 외부 스킬이 연결되어 있거나 이후 `rollback`한 경우에는 바꾸지 않습니다. 기존 프로젝트는 고정 버전을 유지하며 강제로 migrate하지 않습니다. CLI 세션 운영 정책은 실행 중인 현재 엔진이 적용하고, 방의 연구 지침은 프로젝트가 고정한 릴리스를 유지합니다. 프로젝트별 구조 전환은 아래 순서를 따릅니다.
+현재 엔진을 처음 실행하면 외부 스킬 연결이 없는 이전 공용 기본값을 한 번 갱신합니다. 기본값에 검토된 외부 스킬이 연결되어 있거나 이후 `rollback`한 경우에는 바꾸지 않습니다. 기존 0.3.0 프로젝트를 포함해 프로젝트의 고정 버전은 강제로 바꾸거나 migrate하지 않습니다. CLI·웹 세션 운영 정책은 실행 중인 현재 엔진이 적용하고, 방의 연구 지침은 프로젝트가 고정한 릴리스를 유지합니다. 프로젝트별 구조 전환은 아래 순서를 따릅니다.
 
 ```sh
 cd /path/to/research-project

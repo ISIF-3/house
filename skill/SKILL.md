@@ -12,6 +12,7 @@ House keeps reusable methods in a shared installation and research records in a 
 - `$house`, “house 시작”, or user text `/house`: initialize or resume the selected project, then begin in Main.
 - `$house update`, “house update”, or user text `/house update`: follow [GitHub updates](references/update.md).
 - A named room: initialize if needed, load that room's context, then work there.
+- CLI startup with browser operation: use `house web --project <project-directory>` and [browser operation](references/rooms.md#browser-operation). Calling `$house` alone does not start that server or turn this chat into its Main.
 
 `$house` is the explicit Codex skill invocation. `/house` above describes user intent; installing this skill does not register a built-in Codex slash command. The standalone terminal command is `house`.
 
@@ -59,7 +60,7 @@ Resolve `scripts/house.py` relative to this SKILL.md. It uses Python 3.9+ and th
 
 ## Native CLI sessions
 
-The `house start` / `house room` launcher injects invocation-scoped native hooks and room roles; it does not change global Codex config or bypass native hook trust review. Calling `$house` in an existing app chat does not attach those automatic hooks. Do not claim automatic session tracking without that CLI integration. The CLI keeps the room's `--cd` and foreground interaction; `/subagents` shows child work, and a separate terminal can run read-only `house sessions --watch` (or `--room ROOM`, `--json`). It does not open five terminals.
+The `house start` / `house room` and `house web` launchers inject invocation-scoped native hooks and room roles; they do not change global Codex config or bypass native hook trust review. Calling `$house` in an existing app chat does not attach those automatic hooks. Do not claim automatic session tracking without that integration. The foreground path keeps the room's `--cd`; `/subagents` shows child work. Web mode shows the same five fixed rooms in the browser. A separate terminal can run read-only `house sessions --watch` (or `--room ROOM`, `--json`). These commands do not open five terminals.
 
 Follow the start hook's actual native chat ID and paths under `<house>/<room>/sessions/<id>/`. Resume and compaction keep that ID's workspace and observed counts. Write the session's `handoff.md` with actual content under `## 목표`, `## 확정 결정`, `## 실행 중인 작업`, `## 다음 행동`, at most 8,000 characters in total. Main also maintains `main/handoff.md`. Save a validated snapshot with:
 
@@ -68,6 +69,16 @@ python3 <skill-directory>/scripts/house.py session checkpoint <native-chat-id> -
 ```
 
 Add `--boundary` only after a real work segment is finished, not at every response. At 70% recent context observation, prepare the handoff. After at least 10 completed automatic compactions, a saved boundary checkpoint recommends a new chat once. Never end the chat, stop a running computation or create a replacement chat merely because a counter reached 10. See [session details and observation limits](references/rooms.md#continue-after-interruption).
+
+## Browser mode
+
+`house web --project <project-directory>` initializes missing House records and runs a loopback server at `127.0.0.1:8765` with a Codex app-server child using the existing CLI login. `--port 0` chooses a free port; `--no-browser` prints the URL without opening it. `--resume <Main-native-id>` must identify a Main session recorded in this House. `--dry-run --json` initializes records and shows the plan without starting the server or Codex. Preserve project pins.
+
+The sidebar's model, reasoning effort and automatic/standard/Fast choices apply only to newly submitted Main requests. Use native advertised capabilities; incompatible choices return to automatic when the model changes. Each queued request keeps its captured settings, and existing child agents retain theirs. Fast can increase usage; show the linked guidance. Do not change global settings or interrupt a turn to apply a picker choice.
+
+Wait for hook trust review before accepting work. The browser shows exact commands and hashes; only the user's approval permits trust for this invocation. Do not alter global configuration, bypass trust, or enable a required hook the user disabled. All room requests enter Main's durable queue (8,000 characters, at most 20 waiting). Preserve running work; `delivery_unknown` means inspect actual progress before deciding whether to send a follow-up, never automatically retry.
+
+Closing the browser leaves work running. CLI Ctrl-C closes the server and its owned Codex connection; it does not send external computation termination commands. Resume by the recorded Main ID. Do not operate the same chat through foreground CLI and web simultaneously. Status may be unknown, and native turn completion is not research completion. See [browser operation and verified limits](references/rooms.md#browser-operation).
 
 ## Keep the records light
 
@@ -85,4 +96,4 @@ Results keep only summaries, small figures and tables, and the raw location, siz
 
 State where the project lives, what was written, what was actually executed and the next unresolved decision. Update the handoff and, if tracked, `save` before ending. Keep facts, interpretations, proposals and accepted decisions distinct. Literature needs traceable sources; experiment results need an executed version and run ID. Never infer successful research from a subprocess exit or an empty output folder.
 
-The terminal application opens one selected foreground Codex room and prevents overlapping launches of that room. Main can coordinate its four reusable room agents. Session workspaces share the research tree; they are neither isolated git worktrees nor computation checkpoints. An always-running multi-room service and an enabled weekly scheduler are not implied.
+The foreground application opens one selected Codex room; web mode owns a local server and Codex app-server connection. Main coordinates its four reusable room agents. Session workspaces share the research tree; they are neither isolated git worktrees nor computation checkpoints. An always-running multi-room service and an enabled weekly scheduler are not implied.

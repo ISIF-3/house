@@ -120,6 +120,12 @@ def parser():
     checkpoint.add_argument('session_id')
     checkpoint.add_argument('--room', choices=ROOMS, default='main')
     checkpoint.add_argument('--boundary', action='store_true', help='실제 작업 구간 종료로 표시')
+    web = sub.add_parser('web', help='CLI에서 로컬 연구실 웹을 실행하고 브라우저로 작업 지시')
+    common(web, sub=True)
+    web.add_argument('--port', type=int, default=8765, help='로컬 웹 포트 (0: 빈 포트 자동 선택)')
+    web.add_argument('--no-browser', action='store_true', help='주소만 출력하고 브라우저는 자동으로 열지 않음')
+    web.add_argument('--resume', help='이 House에 기록된 Main 세션 ID 재개')
+    web.add_argument('--goal', help='새 프로젝트의 연구 목표')
     return p
 
 
@@ -470,6 +476,11 @@ def main(argv=None):
         if command == 'init':
             emit(initialized, args.json)
             return 0
+        if command == 'web':
+            from .web import launch_web
+            pin = read_json(root / 'hive.lock.json')
+            return launch_web(context(root, 'main'), Path(pin['home']), args.codex, args.port,
+                              not args.no_browser, args.resume, args.dry_run, args.json)
         room = args.room if command == 'room' else 'main' if command == 'start' else choose_room()
         if room is None:
             return 0
