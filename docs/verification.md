@@ -104,6 +104,10 @@
 - 별도 임시 프로젝트에서 CLI capture → check → snapshot → 작은 실제 fixture 실행 →
   verify-run 흐름과, 보존 입력 변조 뒤 검증 실패를 테스트했다. 연구 모델/과학 결과를 만든 검증은 아니다.
 - `house --version`은 `house 0.4.1`. 변경 Markdown의 로컬 파일 링크와 `git diff --check` 통과.
+- 초기 [GitHub Actions 실행](https://github.com/ISIF-3/house/actions/runs/39592276335)에서
+  Ubuntu 26.04의 Python 3.9 설치가 테스트 전에 실패했다. 기존 Python 3.9/3.12 지원 검사를
+  유지하도록 Linux runner를 `ubuntu-24.04`로 고정했다. Ubuntu 26.04에서 구버전 Python을
+  설치할 수 없는 제약은 [공식 runner 안내](https://github.com/actions/runner-images/issues/14748)에도 기록되어 있다.
 - `codex --version`은 0.163.0으로 확인했으나 실제 로그인 모델 세션의 새 훅·대규모 입력·장기 작업은
   이번에 실행하지 않았다. 훅 검사는 최대 60초이며 전체 입력 해시 검사 비용은 파일 크기에 비례한다.
   이 환경에 conda/pymat가 없어 House 자체의 표준 Python 테스트를 사용했으며 과학 계산은 하지 않았다.
