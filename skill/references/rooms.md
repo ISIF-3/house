@@ -2,6 +2,15 @@
 
 Main is the project's coordinator, not a substitute for all room records. It can read every room and track requests between rooms. A room's task should name its inputs, outputs, version/run and completion criteria. Main owns the shared progress and decision records; avoid simultaneous writes to the same file.
 
+All rooms apply the declared [research scope and evidence](research.md). Scientific
+decision ownership is separate from a room's workflow role. Respect the agreed task
+bundle, preserve scientific meanings, fail on missing/invalid required inputs, and
+check actual changed files and current references before reporting completion.
+Capture each external source state separately. Work checks the contract and freezes
+the exact run basis; Output verifies that historical basis; Discussion records its
+owner and proposed/adopted/exploratory state. Missing data is not permission to invent
+defaults or select another source. Length/age alone is not an archive reason.
+
 Main reserves one reusable agent for each of **literature, work, output and discussion**, starting a room's agent when needed. Send later work to that ID (`send_input`, or `resume_agent` when needed). Pass the pinned room guide, goal, input paths, allowed output paths and completion criteria. Do not spawn an agent for every task or let room agents spawn children. Foreground CLI and web mode supply these four custom roles and use trusted native hooks to restrict default worker/explorer roles, duplicate room agents and recursive spawning. Reuse the registered agent even after a bounded task finishes; inspect it with `/subagents` in foreground CLI or its room in the web view. In an app chat invoked only with `$house`, follow this allocation without claiming CLI hook enforcement is attached.
 
 On Codex 0.154.0, hooks declared in a custom role file may not be projected into the child runtime. Enforcement therefore relies on the trusted parent Main's `PreToolUse` hook being inherited and checking the caller and registry, together with the native depth limit. Do not claim a role file alone enforces the policy or that unreviewed hooks are active.

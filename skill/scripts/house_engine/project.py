@@ -257,6 +257,9 @@ def init_project(project: Path, home: Path, goal: Optional[str] = None) -> dict:
         directories, base_files = _project_plan(ROOM_INSTRUCTIONS, project_templates())
         _preflight(root, directories, list(base_files) + ["hive.lock.json"])
     if existing_lock is not None:
+        # A missing scientific contract is not an empty template to reconstruct.
+        from .research import load as research_contract
+        research_contract(root)
         home = _root(Path(existing_lock["home"]))
         manifest, rooms, templates = _release(home, existing_lock["release"])
         project_lock = existing_lock

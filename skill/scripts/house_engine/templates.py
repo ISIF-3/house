@@ -7,7 +7,7 @@ STATUS_MARK = "<!-- house:status -->"
 # Written by `house migrate` where an older initial line remained in a written record.
 MIGRATED_STATUS = "상태: 기록 있음 — 다음 작업에서 현재 상태로 갱신 필요 " + STATUS_MARK
 HANDOFF_LIMIT = 8000
-# Records read on demand stay short; older content moves to main/archive/<date>/.
+# Long records trigger review; length alone does not justify moving evidence.
 RECORD_LIMIT = 20000
 
 COMMON = """\n## 공통 원칙
@@ -16,6 +16,11 @@ COMMON = """\n## 공통 원칙
 - bindings가 있으면 기록된 정확한 불변 경로와 리비전을 확인한다. 공유 기본값 변경을 현재 프로젝트에 자동 적용하지 않는다.
 - 연구 이유, 목표, 성공 기준, 데이터와 설계에 대한 사용자 합의를 먼저 기록한다. 합의 전 AI·통계 모델 구현이나 학습을 시작하지 않는다.
 - 기존 파일을 읽고 보존한다. 추정, 확인된 사실, 미실행 계획과 실제 실행 결과를 구분한다.
+- research.json은 프로젝트 기준의 작업 범위·필수 입력·기준의 소유자와 상태·의존성·보존 정책을 기록한다.
+  최초 값은 미합의 상태다. 실제 합의 후 Main이 갱신한다. 범위 안의 작업은 반복 승인 없이 끝내고,
+  과학적 정의·선정/그룹 규칙·에너지/descriptor 의미·입출력 범위의 변경이나 공유 결과 영향은 먼저 확인한다.
+  필수 입력이 없거나 잘못되면 명확히 중단한다. 추정 기본값·다른 출처·호환 링크로 복구하지 않는다.
+  방 이름이나 물리적 경로만으로 과학적 결정권을 추론하지 않는다. Main은 각 기준 소유자의 채택을 대신하지 않는다.
 - `<!-- house:status -->`가 붙은 줄은 House가 관리하는 문서 상태 줄이다. 문서에 실제 내용을 쓰면 이 줄을
   `상태: <현재 상태> — <날짜> <!-- house:status -->`로 바꿔 쓴다. 보존 대상이 아니며 템플릿 문구를 해명하는 문장을 덧붙이지 않는다.
 - main/work.md는 날짜별 누적 로그다. 기존 항목은 고치지 않고 아래에 추가한다.
@@ -33,7 +38,11 @@ COMMON = """\n## 공통 원칙
   자동 압축 10회 이상이면 저장된 작업 구간 종료에서만 새 채팅을 권장한다. 계산이나 채팅을 자동 종료하지 않는다.
 - Main만 literature/work/output/discussion의 고정 역할에 방마다 한 번 위임한다. 후속 작업은 기존 agent ID에
   send_input/resume_agent로 전달한다. 작업마다 새 에이전트를 만들지 않고 하위 방은 재귀 위임하지 않는다.
-- main의 work·decisions·target·design이 20,000자를 넘으면 지난 내용을 main/archive/<날짜>/로 옮기고 현재 요약만 남긴다.
+- main의 work·decisions·target·design이 20,000자를 넘으면 보존 목적과 의존성을 검토한다. 길이·나이만으로
+  이동하지 않는다. 합의된 보관에는 main/archive/<날짜>/를 사용할 수 있다. 과거 날짜·검증 상태·역사 경로를 바꾸지 않는다.
+  아카이브는 활성 입력으로 직접 사용하지 않는다. 재사용할 부분만 소유 위치로 복사하고 원래 경로와 해시를 남긴다.
+  폐기 연구의 삭제는 명시 합의된 묶음과 의존성 확인을 전제로 하며, 공유 근거를 보존하고 이유·대체 근거 유무를 기록한다.
+  완료 전 실제 파일을 다시 읽고 영향받는 현재 링크·입력 경로·산출물을 확인한다. 미실행·미검증을 구분해 보고한다.
 """
 
 ROOM_INSTRUCTIONS = {
@@ -54,6 +63,9 @@ GUIDE.md를 따르고 reference.md에 출처 URL/DOI, 서지사항, 확인 상�
 원문은 reference/에, 근거 추출은 extract/에 둔다. 각 추출에는 원문 위치(쪽·표·절), 인용/요약 구분,
 연구 설계, 표본, 방법, 결과, 한계와 연구 목표 관련성을 기록한다. 확인하지 않은 논문이나 수치를 만들지 않는다.
 접근하지 못한 원문과 검색 범위의 한계를 밝힌다. 결론에 영향을 주는 근거는 Main으로 전달한다.
+새 외부 조회는 새 source state다. 기존 capture를 덮어쓰지 않는다. 명시한 원본 파일은
+`house research capture <파일> --id <새ID> --source <출처> --purpose <목적>`로 별도 보존한다.
+보관 자료를 재사용하면 --from-archive로 원래 경로와 해시를 남긴다. 원본·.env를 임의로 복제하지 않는다.
 """,
     "work": """# Work — 합의된 설계의 재현 가능한 실행
 
@@ -65,6 +77,10 @@ data/에는 사용자가 허용한 작은 데이터와 출처를, src/에는 실
 실행 결과는 ../output/<version>/<run>/에 저장한다. 버전·실행 ID, 명령, 환경, 데이터 식별자,
 난수 시드, 로그와 성공/실패를 연결한다. 체크포인트·단계별 배열 같은 원본 출력은 ../../house-data/나 계산 서버에 쓴다.
 초기화만으로 노트북이나 실행 결과를 만들지 않는다.
+실행 전 `house research check`로 research.json의 합의·필수 입력·해시·기준 상태를 확인한다.
+`house research snapshot output/<version>/<run>`으로 실행에 사용할 근거를 먼저 고정한다.
+제안된 기준은 채택된 것으로 쓰지 않는다. 사용자와 소유자가 합의한 시험은 use=exploratory로 명시한다.
+실제 실행의 command, status(completed/failed), basis_sha256을 run.json에 기록한다. 스냅샷은 실행 증거가 아니다.
 """,
     "output": """# Output — 확인된 실행 결과와 해석
 
@@ -75,6 +91,9 @@ summary.md에는 실제 관찰한 결과와 연구 목표 대비 해석을 기�
 표·그림은 원본 데이터와 실행 경로를 연결하고, 실패한 실행·불확실성·한계도 남긴다.
 계획이나 예상 수치를 실행 결과로 표현하지 않는다. 요약을 Main의 results.md와 연결한다.
 설계 변경이 필요하면 Discussion에 요청하고 Main의 결정을 기다린다.
+`house research verify-run output/<version>/<run>`으로 당시 입력과 고정된 기준·결정 문서,
+run.json의 basis_sha256을 확인한다. 현재 기준을 과거 결과에 소급 적용하지 않는다.
+파일 일치·실행 기록 검사는 과학적 타당성 검증과 구분한다. criterion의 owner/status/use와 시험의 한계를 설명한다.
 """,
     "discussion": """# Discussion — 근거가 있는 개선 요청
 
@@ -82,6 +101,8 @@ GUIDE.md를 따라 requests/에 개선 요청을 작성한다. 요청마다 문�
 비용·위험, 검증 방법과 상태를 적는다. 확인되지 않은 결과나 사용자 합의를 꾸며내지 않는다.
 개선 요청 → Main 검토 → 사용자와 결정 → decisions.md 기록 → 해당 방 실행 순서를 따른다.
 Discussion의 제안을 곧바로 합의나 실행 지시로 취급하지 않는다. 수락·보류·거절 이유와 결정 경로를 남긴다.
+각 제안의 결정 책임자와 적용 범위를 명시한다. research.json의 proposed/adopted/rejected 상태와 결정 근거를
+연결한다. 다른 책임 단위의 일반 기준은 그 소유자가 채택하기 전까지 검토 중이며, 선택 범위의 시험과 구분한다.
 """,
 }
 ROOM_INSTRUCTIONS = {room: guide + COMMON for room, guide in ROOM_INSTRUCTIONS.items()}
@@ -113,6 +134,10 @@ CLI의 세션 작업 폴더와 인계는 선택한 방의 sessions/<chat-id>/에
 작업 진행은 main/work.md 아래에 날짜별로 추가한다. 모델 노트북과 설명 MD를 버전별로 함께 관리하고 결과는 output/<version>/<run>/에 둔다.
 원본·대용량 출력은 house/ 밖에 두고 위치·크기·해시만 기록한다. 실행 중인 계산의 출력 폴더는 옮기지 않는다.
 외부 스킬은 잠금의 bindings에 지정된 정확한 불변 경로를 확인한 뒤 필요할 때 읽는다.
+research.json에 실제 합의된 작업 범위·필수 입력·기준 소유자/상태·의존성·보존 정책을 기록한다.
+Work 실행 전에 house research check가 통과해야 한다. 누락·오류 입력을 다른 출처나 추정값으로 대체하지 않는다.
+기준 변경·공유 결과 영향은 해당 책임자와 확인하며, 기존 결과의 입력·기준을 소급해 바꾸지 않는다.
+정리·이동에는 목적과 의존성을 확인하고, 길이·나이만으로 아카이브하지 않는다. 완료 전 실제 파일과 현재 참조를 재확인한다.
 """,
     ".gitignore": """# House 기록 저장소 규칙: 텍스트 기록은 추적하고 원본·대용량 데이터는 제외한다.
 # 원본 데이터는 `house offload <경로>`로 house/ 밖(../house-data/)에 옮긴다.
@@ -305,7 +330,10 @@ LEGACY_PLACEHOLDERS = (
 
 
 def project_templates(goal=None):
+    import json
+    from .research import template
     files = dict(PROJECT_TEMPLATES)
+    files['research.json'] = json.dumps(template(), ensure_ascii=False, indent=2) + '\n'
     files["main/target.md"] = files["main/target.md"].format(goal=goal if goal else "아직 기록된 목표가 없다.")
     return files
 
