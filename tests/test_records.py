@@ -1,4 +1,5 @@
 import errno
+import hashlib
 import importlib.util
 import json
 import os
@@ -52,7 +53,19 @@ class RecordTests(unittest.TestCase):
         self.addCleanup(patcher.stop)
 
     def init(self):
-        return Path(init_project(self.project, self.home)['root'])
+        root = Path(init_project(self.project, self.home)['root'])
+        self.agree_file_operations(root)
+        return root
+
+    def agree_file_operations(self, root):
+        # Existing filesystem-operation tests select the old link policy explicitly.
+        # New default refusal, scope and purpose checks are covered in test_research.
+        contract = read_json(root / 'research.json')
+        contract['scope'].update(status='agreed', purpose='Filesystem test fixture',
+                                 allowed_writes=['house', 'house-data', 'external'], agreement='house/main/decisions.md',
+                                 agreement_sha256=hashlib.sha256((root / 'main/decisions.md').read_bytes()).hexdigest())
+        contract['preservation'].update(allow_compatibility_symlinks=True, reason_required=False)
+        atomic_json(root / 'research.json', contract)
 
     def legacy(self):
         """A project created by House 0.1.0 in a home that predates engine_release."""
@@ -249,7 +262,7 @@ class RecordTests(unittest.TestCase):
         with self.assertRaises(HouseError):
             records.offload(root, 'output/model_v1/run-001/raw')
         self.assertTrue((run / 'raw/final.json').is_file())
-        moved = records.offload(root, 'output/model_v1/run-001', to=self.base / 'external', allow_records=True)
+        moved = records.offload(root, 'output/model_v1/run-001', to=self.project / 'external', allow_records=True)
         self.assertEqual(moved['status'], 'moved')
 
     def test_cross_device_offload_copies_verifies_then_removes_source(self):
@@ -387,6 +400,8 @@ class RecordTests(unittest.TestCase):
         applied = self.run_house('migrate')
         self.assertEqual(applied.returncode, 0, applied.stderr)
         self.assertIn('REPORT.md', applied.stdout)
+        self.assertEqual(read_json(root / 'research.json')['scope']['status'], 'unconfirmed')
+        self.agree_file_operations(root)
         moved = self.run_house('offload', 'house/output/model_v1/run-001/raw', '--json')
         self.assertEqual(moved.returncode, 0, moved.stderr)
         self.assertTrue((root / 'output/model_v1/run-001/raw').is_symlink())

@@ -31,6 +31,26 @@ Codex 앱·CLI·확장에서 프로젝트를 열고 **`$house 연구 목표를 �
 
 Main은 연구의 이유·최종 목표를 정리하고 데이터, 방법, 평가 기준과 자원을 설명합니다. 실제 AI·통계 모델 구현은 설계에 합의한 뒤 시작합니다. 초기화 시 가짜 노트북·논문·결과·승인을 만들지 않습니다.
 
+## 연구 범위·입력·근거 관리 (0.4.1)
+
+기존 최상위 파일과 다섯 방 체계에 `house/research.json`을 연결합니다. Main이 실제 합의된 작업 범위,
+필수 입력과 해시, 과학적 기준의 소유자·검토/채택 상태, 의존성과 보존 정책을 기록하고 모든 방이 사용합니다.
+새 프로젝트는 미합의 상태로 시작합니다. 합의·입력 확인 전에는 Work 실행·생성·후속 작업을 막고,
+필수 입력이 없거나 바뀌었을 때 다른 출처나 추정값으로 대체하지 않습니다.
+
+```sh
+house research check --json
+house research capture /path/to/source.json --id query-001 --source '출처' --purpose '합의한 수집 목적'
+house research snapshot output/model_v1/run-001
+# 실제 계산 후 run.json에 command, status, 위 스냅샷의 basis_sha256 기록
+house research verify-run output/model_v1/run-001
+```
+
+새 조회는 새 ID의 수집본으로 보존합니다. 실행 전 `basis.json`에 입력과 당시의 기준·결정·출처 근거를
+고정하고, 결과 검토는 그 근거를 사용합니다. 현재 기준 변경이 과거 실행에 소급 적용되지 않습니다.
+상세 스키마, 작업 순서와 검증 한계는 [연구 계약 지침](skill/references/research.md)에 있습니다.
+기존 프로젝트 pin은 유지하며, 명시적인 migrate로 채택합니다. 계약 파일이 동의나 과학적 타당성을 인증하지는 않습니다.
+
 ## 브라우저에서 운영하기 (0.4.0)
 
 CLI에서 실행하고 브라우저에서 Main과 네 방의 작업·대화·파일을 확인합니다. 없는 프로젝트 구조는 자동 초기화하며 기존 House의 고정 릴리스는 유지합니다. 별도 API 키를 요구하지 않고 기존 Codex CLI의 ChatGPT 로그인을 사용합니다.
@@ -88,6 +108,7 @@ house web --project /path/to/research --dry-run --json
 ├── house-data/                  house offload로 옮긴 원본 데이터 (자체 .gitignore로 git 제외)
 └── house/                       텍스트 기록 (house track으로 git 추적)
     ├── HOUSE.md / AGENTS.md / hive.lock.json / .gitignore
+    ├── research.json              범위·필수 입력·과학적 기준 소유권·의존성·보존 정책
     ├── house-data.json          옮긴 원본의 위치·크기·목록 해시
     ├── main/
     │   ├── why.md / target.md / design.md
@@ -143,13 +164,13 @@ house session checkpoint CHAT_ID --room main --boundary --project /path/to/resea
 
 - **상태 줄**: 문서의 `상태: … <!-- house:status -->` 줄은 House가 관리합니다. 내용을 쓰면 이 줄을 현재 상태로 바꿉니다. 초기 문구를 남겨 두고 해명 문장을 덧붙이지 않습니다. `house check`는 내용이 생겼는데 상태 줄이 그대로인 문서를 알려 줍니다.
 - **work와 handoff**: `main/work.md`는 날짜별 누적 로그, `main/handoff.md`는 매 작업 종료 때 전체를 다시 쓰는 현재 상태(8,000자 이내)입니다. 지난 내용은 work.md와 git 이력에 남습니다.
-- **원본 데이터 분리**: 체크포인트·단계별 배열·대량 로그는 house/ 밖에 둡니다. 이미 house/ 안에 생긴 폴더는 옮기고 원래 자리에 상대 링크를 남겨 기존 코드 경로가 그대로 작동합니다. `.md` 기록이 든 폴더와 최근 30분 안에 바뀐 폴더(실행 중일 수 있음)는 거부합니다.
+- **원본 데이터 분리**: 체크포인트·단계별 배열·대량 로그는 house/ 밖에 둡니다. 이동 전 보존 목적·선언된 의존성·쓰기 범위를 확인합니다. 계약이 호환 링크를 금지하면 `--no-link`를 사용하며, 그 이동으로 선언된 입력/참조가 끊기면 거부합니다. `.md` 기록과 최근 변경 출력의 기존 보호도 유지합니다. 크기·기록 길이·나이만으로 이동하거나 아카이브하지 않습니다.
 - **git 추적**: house/의 텍스트 기록만 커밋합니다. 프로젝트가 git 저장소가 아니면 house/에 저장소를 만들고, 저장소 안이면 house/ 경로만 커밋해 다른 staged 변경은 건드리지 않습니다. 10MB 넘는 파일, 합계 200MB, 5,000개를 넘는 추가는 거부합니다. house/.gitignore는 상위 프로젝트의 ignore 규칙이 방 폴더를 가리지 않게 다시 포함합니다.
 
 ```sh
 house check                                   # 옮길 후보·git·상태 줄·handoff 길이
-house offload output/model_v1/run-001/cases   # 원본 폴더를 ../house-data/로 옮기고 링크 남김
-house offload --suggested --dry-run           # check 후보 전체의 이동 계획
+house offload output/model_v1/run-001/cases --no-link --reason '합의한 보존 목적'
+house offload --suggested --no-link --reason '합의한 보존 목적' --dry-run
 house track                                   # git 추적 시작 (첫 커밋)
 house save -m 'model_v1 run-002 결과 정리'      # house/ 기록만 커밋
 ```
@@ -163,8 +184,9 @@ cd /path/to/research-project
 house check                        # 현재 상태 확인
 house migrate --dry-run            # 바뀔 파일 목록 (변경 없음)
 house migrate                      # 적용: house/main/jobs/house-migrate-*/REPORT.md 생성
-house offload --suggested --dry-run
-house offload --suggested          # 실행 중인 계산이 없는지 확인한 뒤
+house research check              # 새 계약의 실제 범위·입력·보존 정책을 확인
+house offload --suggested --no-link --reason '합의한 보존 목적' --dry-run
+house offload --suggested --no-link --reason '합의한 보존 목적' # 의존성과 실행 상태 확인 후
 house track
 ```
 

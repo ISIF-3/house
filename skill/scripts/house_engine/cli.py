@@ -100,6 +100,21 @@ def parser():
     offload.add_argument('--no-link', action='store_true', help='원래 자리에 링크를 남기지 않음')
     offload.add_argument('--hash', action='store_true', help='파일별 SHA-256도 기록 (큰 데이터는 느림)')
     offload.add_argument('--allow-records', action='store_true', help='.md 기록이 들어 있어도 옮김')
+    offload.add_argument('--reason', help='이동의 보존 목적 (프로젝트 정책이 요구하면 필수)')
+    research = sub.add_parser('research', help='연구 범위·입력·기준·출처·실행 근거 검증')
+    common(research, sub=True)
+    actions = research.add_subparsers(dest='operation', required=True)
+    for operation in ('check', 'snapshot', 'verify-run', 'capture'):
+        action = actions.add_parser(operation)
+        common(action, sub=True)
+        if operation in ('snapshot', 'verify-run'):
+            action.add_argument('run', help='output/<version>/<run>')
+        if operation == 'capture':
+            action.add_argument('source', type=Path, help='명시적으로 확보한 원본 파일')
+            action.add_argument('--id', required=True, help='새 수집본 ID (재사용·덮어쓰기 금지)')
+            action.add_argument('--source', dest='source_label', required=True, help='출처 URL/식별자')
+            action.add_argument('--purpose', required=True, help='수집·재사용 목적')
+            action.add_argument('--from-archive', action='store_true', help='보관 출처 경로와 해시도 기록')
     migrate = sub.add_parser('migrate', help='이 프로젝트를 새 House 구조로 전환 (바꾼 파일은 백업)')
     common(migrate, sub=True)
     migrate.add_argument('--release', help='전환할 공용 버전 (기본: 현재 엔진 버전)')
@@ -140,6 +155,7 @@ def resolve_root(project):
 
 def context(root, room):
     from .room_agents import POLICY
+    from .research import load as research_contract
     root = Path(root).resolve()
     pin = read_json(root / 'hive.lock.json')
     home = Path(pin['home'])
@@ -156,6 +172,7 @@ def context(root, room):
         for binding in bindings:
             verify_binding(home, binding)
     skill_refs = [str(Path(b['path']) / 'SKILL.md') for b in bindings]
+    contract = research_contract(root)
     prompt = '\n'.join([
         'House 연구 작업을 현재 Codex 채팅에서 진행하세요. 새 Codex 프로세스를 재귀 실행하지 마세요.',
         '선택한 방: ' + room + ' (' + ROOM_LABELS[room] + ')',
@@ -172,6 +189,12 @@ def context(root, room):
         '자동 압축 10회 이상이면 실제 작업 구간 종료 때 세션 인계를 저장한 뒤 새 채팅을 권장하세요. '
         '계산을 중단하거나 채팅을 자동으로 닫지 마세요. 세션 폴더와 저장 명령은 시작 훅이 알려줍니다.',
         POLICY,
+        '연구 계약: ' + (str(root / 'research.json') if contract is not None else
+                          '미선언 (기존 고정 프로젝트; 입력 검증을 통과했다는 뜻이 아닙니다)'),
+        '연구 계약 형식과 실행 절차: ' + str(Path(__file__).resolve().parents[2] / 'references/research.md'),
+        '연구 계약의 경로는 house/의 상위 프로젝트 기준입니다. 실제 합의·입력·기준 상태를 기록하고 '
+        '계산 전 house research check, 실행 전 research snapshot, 결과 보고 전 research verify-run을 사용하세요. '
+        '계약 파일은 동의나 과학적 타당성을 자동으로 증명하지 않습니다.',
         '기록 관리 명령: ' + shlex.join([sys.executable, str(Path(__file__).resolve().parents[1] / 'house.py')])
         + ' check | save -m "<요약>" | offload <house 안 경로> (비대화형, 현재 채팅에서 실행 가능)',
         '사용할 고정 스킬: ' + json.dumps(skill_refs, ensure_ascii=False),
@@ -209,9 +232,10 @@ def session_config(info, home, write=False):
     result = ['features.hooks=true']
     for name in ('SessionStart', 'PostCompact', 'UserPromptSubmit', 'PostToolUse',
                  'PreToolUse', 'SubagentStart', 'Stop'):
-        matcher = ',matcher="^(spawn_agent|Agent)$"' if name == 'PreToolUse' else ''
+        matcher = ',matcher="^(spawn_agent|Agent|send_input|resume_agent)$"' if name == 'PreToolUse' else ''
+        timeout = 60 if name == 'PreToolUse' else 10
         result.append('hooks.' + name + '=[{hooks=[{type="command",command='
-                      + json.dumps(command + ' --event ' + name, ensure_ascii=False) + ',timeout=10}]' + matcher + '}]')
+                      + json.dumps(command + ' --event ' + name, ensure_ascii=False) + ',timeout=' + str(timeout) + '}]' + matcher + '}]')
     if info['room'] == 'main':
         contexts = {room: context(Path(info['root']), room) for room in ROOMS if room != 'main'}
         result.extend(role_overrides(Path(info['root']), home, contexts, write))
@@ -246,6 +270,9 @@ def choose_room():
 
 
 def launch(info, home, executable=None, dry_run=False, as_json=False, update=False):
+    if not update and info.get('room') == 'work' and not dry_run:
+        from .research import gate_work
+        gate_work(Path(info['root']))
     overrides = session_config(info, home) if not update else []
     info['argv'] = codex_argv(info, executable, update=update, overrides=overrides)
     if not update:
@@ -407,12 +434,13 @@ def records_command(args, root, project):
         if args.suggested == bool(args.path):
             raise HouseError('옮길 경로 하나 또는 --suggested 중 하나를 지정하세요.')
         if args.suggested:
-            emit(records.offload_suggested(root, to=args.to, link=not args.no_link, content_hash=args.hash,
-                                           dry_run=args.dry_run), args.json)
-            return 0
+            value = records.offload_suggested(root, to=args.to, link=not args.no_link, content_hash=args.hash,
+                                             dry_run=args.dry_run, reason=args.reason)
+            emit(value, args.json)
+            return 1 if value['skipped'] else 0
         emit(records.offload(root, args.path, to=args.to, link=not args.no_link, content_hash=args.hash,
                              allow_records=args.allow_records, dry_run=args.dry_run, cwd=project,
-                             allow_recent=args.allow_recent), args.json)
+                             allow_recent=args.allow_recent, reason=args.reason), args.json)
         return 0
     value = records.migrate(root, release=args.release, reason=args.reason, dry_run=args.dry_run)
     if args.json:
@@ -430,6 +458,23 @@ def main(argv=None):
         project = (args.project or Path.cwd()).expanduser().absolute()
         home = (args.home or default_home()).expanduser().absolute()
         command = args.command
+        if command == 'research':
+            from . import research
+            root = resolve_root(project)
+            if args.operation == 'check':
+                value = research.check(root)
+                emit(value, args.json)
+                return 0 if value['ready'] else 1
+            if args.dry_run and args.operation in ('capture', 'snapshot'):
+                raise HouseError('research capture/snapshot에는 --dry-run을 사용하지 않습니다. check는 읽기 전용입니다.')
+            if args.operation == 'capture':
+                value = research.capture(root, args.source, args.id, args.source_label, args.purpose, args.from_archive)
+            elif args.operation == 'snapshot':
+                value = research.snapshot(root, args.run)
+            else:
+                value = research.verify_run(root, args.run)
+            emit(value, args.json)
+            return 0
         if command in ('session', 'sessions'):
             return session_command(args, resolve_root(project))
         if command == 'status':

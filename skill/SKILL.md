@@ -56,6 +56,15 @@ Resolve `scripts/house.py` relative to this SKILL.md. It uses Python 3.9+ and th
 
 5. Continue the authorized work using [room conventions](references/rooms.md). Main uses at most one reusable subagent for each of literature, work, output and discussion. Pass the room guide, goal, input paths, allowed output paths and completion criteria; send follow-ups to the existing ID and resume it when needed. Do not create per-task workers or recursive subagents. Keep durable progress and handoff in the project.
 
+6. Apply [research scope and evidence](references/research.md) in every room. New projects have
+   an unconfirmed `research.json`; Main records the actual task purpose, allowed output
+   bundle, protected meanings, agreement evidence/hash, required input hashes, criterion
+   owners/status/use and preservation policy. Work checks these before execution; capture
+   each new external query separately, freeze a run basis before execution and verify it
+   before reporting results. Missing/invalid inputs fail rather than choosing another
+   source. A recorded proposal is not an adopted general rule. Existing file names and room
+   roles do not determine scientific decision ownership.
+
 **Do not run interactive `house`, `house start`, or `house room` inside this chat.** Those commands launch another Codex terminal session. The `init` and `context` commands let this conversation remain the active Main or room.
 
 ## Native CLI sessions
@@ -84,8 +93,8 @@ Closing the browser leaves work running. CLI Ctrl-C closes the server and its ow
 
 The non-interactive record commands run inside this chat with the same `scripts/house.py`:
 
-- `check`: read-only report of size, raw-data candidates, git state, stale status lines, template-explanation lines and handoff length.
-- `offload <path>` / `offload --suggested`: move a raw-data folder or file from `house/` to the project's `house-data/`, leaving a relative link and an entry in `house-data.json`. Show the `--dry-run` list and get the user's confirmation first. Never offload the output folder of a computation that may still be running; paths changed in the last 30 minutes are refused unless the user confirms with `--allow-recent`.
+- `check`: read-only report of size, raw-data candidates, git state, stale status lines, template-explanation lines, handoff length and the declared research contract. Long records trigger preservation/dependency review, not automatic archiving by length or age.
+- `offload <path>` / `offload --suggested`: move raw data out of `house/` and record its manifest. Review the `--dry-run` plan within the actual agreed task scope. Contracts enforce `--reason`, allowed paths, declared dependencies and the symlink policy; use `--no-link` when compatibility links are forbidden. Do not repeat consent requests for a bundle already authorized, or expand the scope silently. Never offload output that may still be running; the recent-output guard remains active. See [preservation](references/research.md#discussion-and-preservation).
 - `track`: start versioning `house/` text records (creates a repository in `house/`, or commits `house/` paths into an enclosing project repository). Ask before the first `track` in a user's existing repository. It refuses raw-data-sized additions.
 - `save -m '<summary>'`: commit only `house/` changes at the end of a work session when the project is tracked.
 - `migrate`: move a project pinned to an older release to the current structure, as described above.
@@ -94,6 +103,6 @@ Results keep only summaries, small figures and tables, and the raw location, siz
 
 ## Report the actual state
 
-State where the project lives, what was written, what was actually executed and the next unresolved decision. Update the handoff and, if tracked, `save` before ending. Keep facts, interpretations, proposals and accepted decisions distinct. Literature needs traceable sources; experiment results need an executed version and run ID. Never infer successful research from a subprocess exit or an empty output folder.
+State where the project lives, what was written, what was actually executed and the next unresolved decision. Reread actual changes and check affected current links, inputs and outputs before reporting completion. Keep original validation dates and distinguish unfinished/unverified work. Detailed provenance belongs with its evidence; summaries link to it. Update the handoff and, if tracked, `save` before ending. Keep facts, interpretations, proposals and accepted decisions distinct. Literature needs traceable sources; experiment results need an executed version and run ID. Never infer successful research from a subprocess exit or an empty output folder.
 
 The foreground application opens one selected Codex room; web mode owns a local server and Codex app-server connection. Main coordinates its four reusable room agents. Session workspaces share the research tree; they are neither isolated git worktrees nor computation checkpoints. An always-running multi-room service and an enabled weekly scheduler are not implied.

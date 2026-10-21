@@ -85,6 +85,23 @@ def handle_hook(root, room, event):
     """Reserve before spawning; native SubagentStart supplies the actual agent ID."""
     name = event.get('hook_event_name')
     tool = str(event.get('tool_name', '')).split('.')[-1]
+    if name == 'PreToolUse' and tool in ('send_input', 'resume_agent') and room == 'main':
+        folder = _folder(root, event.get('session_id'))
+        if not folder.is_dir() or not _is_parent(folder, event):
+            return _deny('Main의 원래 세션에서만 방 에이전트에 작업을 전달할 수 있습니다.')
+        inputs = event.get('tool_input')
+        target = inputs.get('id') if isinstance(inputs, dict) else None
+        rooms = _registry(folder)['rooms']
+        if not target or not any(item.get('agent_id') == target for item in rooms.values()):
+            return _deny('이 Main에 기록된 방 에이전트 ID를 지정하세요. 알 수 없는 작업 대상에 전달하지 않았습니다.')
+        worker = rooms.get('work', {})
+        if target and worker.get('agent_id') == target:
+            from .research import gate_work
+            try:
+                gate_work(root)
+            except (HouseError, OSError) as exc:
+                return _deny(str(exc))
+        return {}
     spawning = tool in ('spawn_agent', 'Agent')
     if name not in ('PreToolUse', 'PostToolUse', 'SubagentStart'):
         return {}
@@ -103,6 +120,12 @@ def handle_hook(root, room, event):
     role = event.get('agent_type') if name == 'SubagentStart' else (inputs.get('agent_type') if isinstance(inputs, dict) else None)
     if role not in WORKER_ROOMS:
         return _deny('허용 역할: literature, work, output, discussion. 역할을 명시하고 기존 방 에이전트를 재사용하세요.') if name == 'PreToolUse' else {}
+    if name == 'PreToolUse' and role == 'work':
+        from .research import gate_work
+        try:
+            gate_work(root)
+        except (HouseError, OSError) as exc:
+            return _deny(str(exc))
     with locked(safe_path(folder, '.room-agents.lock')):
         registry = _registry(folder)
         rooms = registry['rooms']
@@ -161,9 +184,9 @@ def role_overrides(root, home, contexts, write=False):
         content = 'developer_instructions = ' + json.dumps(instructions, ensure_ascii=False) + '\n'
         guard = shlex.join([sys.executable, str(Path(__file__).resolve().parents[1] / 'house.py'),
                             'session', 'hook', '--project', str(root), '--room', role, '--event', 'PreToolUse'])
-        content += ('\n[[hooks.PreToolUse]]\nmatcher = "^(spawn_agent|Agent)$"\n'
+        content += ('\n[[hooks.PreToolUse]]\nmatcher = "^(spawn_agent|Agent|send_input|resume_agent)$"\n'
                     '[[hooks.PreToolUse.hooks]]\ntype = "command"\ncommand = '
-                    + json.dumps(guard, ensure_ascii=False) + '\ntimeout = 10\n')
+                    + json.dumps(guard, ensure_ascii=False) + '\ntimeout = 60\n')
         digest = hashlib.sha256(content.encode('utf-8')).hexdigest()
         path = safe_path(home, 'runtime/room-agents/' + digest + '/' + role + '.toml')
         if write:
