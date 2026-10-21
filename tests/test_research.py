@@ -22,7 +22,8 @@ class ResearchTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
-        self.base = Path(self.tmp.name)
+        # macOS exposes /var through /private/var; compare canonical paths.
+        self.base = Path(self.tmp.name).resolve()
         self.project = self.base / 'project with spaces'
         self.project.mkdir()
         self.home = self.base / 'shared'
