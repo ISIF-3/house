@@ -1,0 +1,261 @@
+# House 운영·기록 관리
+
+프로젝트 저장 구조, 웹 운영, 세션 인계, 연구 기록과 스킬 업데이트를 설명합니다.
+처음 설치하거나 기존 대화에 연결할 때는 [설치·실행·설정 안내](setup.md)를 먼저 보세요.
+기능 소개와 빠른 시작은 [README](../README.md), 날짜별 검증 범위는 [검증 기록](verification.md)에 있습니다.
+
+## 기존 대화 연결과 경고
+
+VS Code의 Codex 확장·내장 터미널, 독립 CLI, 로컬 데스크톱 앱에서 같은 프로젝트 연결을 사용합니다.
+지원되는 호스트의 project hooks에 등록하며, 설정 등록·실제 이벤트 수신·화면 경고 확인을 구분합니다.
+
+    house connect --project /path/to/project --dry-run --json
+    house connect --project /path/to/project --apply --json
+    house doctor --project /path/to/project --json
+    house doctor --project /path/to/project --native --json
+    house disconnect --project /path/to/project --apply --json
+
+connect는 프로젝트 hooks에 House 항목만 병합하며 사용자 hooks를 보존합니다. 기존 inline TOML hooks도
+관리 블록으로 연결합니다. 기본값은 계획 조회이며 --apply가 실제 등록·해제입니다. native 훅 신뢰를
+자동 승인하지 않고, 기존 프로젝트의 pin·입력·결과를 바꾸지 않습니다. 등록에는 컴퓨터별 경로가
+들어가므로 팀 공용 설정으로 그대로 커밋하지 않습니다.
+
+등록한 연구 프로젝트에서 Codex CLI를 열고 `/hooks`에서 House 훅 다섯 개의 명령을 검토해 허용합니다.
+기존 클라이언트가 설정을 다시 읽어야 하면 해당 프로젝트의 대화를 재개하거나 다시 엽니다.
+메시지나 도구 실행 뒤 `house doctor --project /path/to/project --json`의
+`event_observation`이 `observed`인지 확인합니다. 자세한 순서와 화면 예시는
+[기존 대화 연결](setup.md#기존-codex-대화에-알림-연결)을 참고하세요.
+
+첫 메시지·도구 이벤트에서 기존 대화도 관측할 수 있습니다. 최근 문맥 70%에서 인계를 준비하고,
+확인 가능한 자동 압축 10회 이후 유효 인계를 저장한 작업 경계에서만 새 대화를 권합니다. 기존
+식별 불가 hook 전달 수는 확정 압축과 구분합니다. 대화·계산을 자동 종료하지 않습니다.
+
+경고는 native 알림 이벤트와 다음 채팅 메시지로 함께 전달합니다. `SessionStart`·`UserPromptSubmit`·
+`PostToolUse`에서 에이전트에게 짧은 경고 표시를 요청하며, 다른 이벤트에서 감지한 경고는 다음 지원
+이벤트까지 보관합니다. 팝업이 보이지 않는 클라이언트에서도 채팅으로 안내할 수 있지만, 출력 준비·
+실제 에이전트 수신·사용자의 화면 확인은 구분합니다. 같은 관측 경고의 채팅 전달 요청은 반복하지 않습니다.
+
+Windows 설치에는 symlink 권한을 요구하지 않는 관리된 복사와 house.cmd를 제공합니다. Windows 앱이
+WSL 소유 프로젝트를 쓸 때는 --wsl-distro로 명시적 전달을 설정할 수 있습니다. 실제 OS·클라이언트별
+검증 범위와 신뢰 확인 절차는 [연결 지침](../skill/references/connections.md)에 있습니다. 로컬 파일
+접근만 가능한 클라우드 대화에 로컬 hooks가 작동한다고 주장하지 않습니다.
+
+## 연구 범위·입력·근거 관리
+
+기존 최상위 파일과 다섯 방 체계에 `house/research.json`을 연결합니다. Main이 실제 합의된 작업 범위,
+필수 입력과 해시, 과학적 기준의 소유자·검토/채택 상태, 의존성과 보존 정책을 기록하고 모든 방이 사용합니다.
+새 프로젝트는 미합의 상태로 시작합니다. 합의·입력 확인 전에는 Work 실행·생성·후속 작업을 막고,
+필수 입력이 없거나 바뀌었을 때 다른 출처나 추정값으로 대체하지 않습니다.
+
+```sh
+house research check --json
+house research capture /path/to/source.json --id query-001 --source '출처' --purpose '합의한 수집 목적'
+house research snapshot output/model_v1/run-001
+# 실제 계산 후 run.json에 command, status, 위 스냅샷의 basis_sha256 기록
+house research verify-run output/model_v1/run-001
+```
+
+새 조회는 새 ID의 수집본으로 보존합니다. 실행 전 `basis.json`에 입력과 당시의 기준·결정·출처 근거를
+고정하고, 결과 검토는 그 근거를 사용합니다. 현재 기준 변경이 과거 실행에 소급 적용되지 않습니다.
+상세 스키마, 작업 순서와 검증 한계는 [연구 계약 지침](../skill/references/research.md)에 있습니다.
+기존 프로젝트 pin은 유지하며, 명시적인 migrate로 채택합니다. 계약 파일이 동의나 과학적 타당성을 인증하지는 않습니다.
+
+## 브라우저에서 운영하기
+
+CLI에서 실행하고 브라우저에서 Main과 네 방의 작업·대화·파일을 확인합니다. 없는 프로젝트 구조는 자동 초기화하며 기존 House의 고정 릴리스는 유지합니다. 별도 API 키를 요구하지 않고 기존 Codex CLI의 ChatGPT 로그인을 사용합니다.
+
+중앙 화면은 **작업 요청 → 연구실 둘러보기 → 선택한 방의 작업 결과 대화 → 확인과 승인** 순서입니다. 왼쪽에는 작업 보드와 세션 관측을 두며 연구 목표 본문과 Main ID는 표시하지 않습니다. 목표 기록은 프로젝트 파일에 보존됩니다.
+
+```sh
+house web --project /path/to/research
+house web --project /path/to/research --port 0 --no-browser
+house web --project /path/to/research --resume MAIN_CHAT_ID
+house web --project /path/to/research --dry-run --json
+```
+
+기본 주소는 `127.0.0.1:8765`이며 `--port 0`은 빈 포트를 고릅니다. `--no-browser`는 주소만 출력합니다. 출력된 인증 주소를 열면 토큰을 해당 탭의 `sessionStorage`에 보관하고 주소의 fragment를 지워 새로고침에도 인증을 유지합니다. API에는 Bearer 헤더로 보내며 query나 cookie에 넣지 않습니다. `--dry-run --json`은 프로젝트 초기화 후 실행 계획을 보여 주며 서버와 Codex는 실행하지 않습니다.
+
+첫 연결에 훅 신뢰 검토가 필요하면 아직 작업을 접수하지 않습니다. 웹에서 훅의 명령·해시를 확인하고 **이번 실행에 허용**하면, House가 소유한 Codex 프로세스를 채팅 생성 전에 다시 시작해 해당 실행의 신뢰를 확인합니다. 전역 설정을 바꾸거나 신뢰 검토를 우회하지 않습니다. 사용자가 비활성화한 필수 훅은 실행을 막으며 임의로 켜지 않습니다.
+
+어느 방에서 요청해도 Main을 거쳐 기존 담당자에게 전달합니다. 지시는 8,000자 이내, 전달 대기는 최대 20개입니다. 실행 중인 작업은 자동 중단하지 않고 다음 Main 턴에서 처리합니다. 대기열은 세션의 `web-queue.json`에 보관하며, 전달 확인이 끊긴 `delivery_unknown` 항목은 자동 재전송하지 않습니다. 기록과 실제 실행 상태를 확인한 뒤 후속 요청을 결정합니다.
+
+세션 관측에서 **Main 모델·추론 강도·속도 모드**를 선택합니다. 추론 강도는 Codex가 해당 모델에 제공하는 단계만 표시하고, 속도는 자동·표준·Fast 중 고릅니다. Fast는 모델이 지원할 때 선택할 수 있으며 사용량이 늘 수 있습니다. [공식 속도 안내](https://learn.chatgpt.com/docs/agent-configuration/speed)
+
+현재 관측된 Main 설정과 다음 요청에 사용할 선택을 구분하며, 요청을 보낼 때 세 설정을 대기열에 함께 저장합니다. 자동은 같은 모델의 관측 설정을 유지하거나 모델 기본값을 사용합니다. 모델을 바꾸면 지원되지 않는 추론 강도와 Fast 선택은 자동으로 돌아갑니다. 선택을 바꿔도 실행 중이거나 이미 대기 중인 요청과 기존 방 담당자의 설정은 유지됩니다. 모델 목록을 가져오지 못하면 새 선택은 사용할 수 없지만 관측된 기존 설정으로 작업할 수 있습니다. 이미 실행 중인 웹 서버에 이 변경을 적용하려면 작업 상태를 확인한 뒤 서버를 재시작하고, 이어갈 Main ID를 `--resume`으로 지정합니다.
+
+브라우저를 닫아도 작업은 계속됩니다. CLI의 **Ctrl-C**는 웹 서버와 House가 소유한 Codex 연결을 종료하며, 외부 계산을 종료하는 명령은 보내지 않습니다. 이어가려면 이 House에 기록된 Main의 native ID를 `--resume`에 지정합니다. 같은 채팅을 CLI와 웹에서 동시에 조작하는 기능은 제공하지 않습니다.
+
+웹은 Codex `app-server --listen stdio://`의 실제 이벤트를 표시합니다. 정보가 없거나 연결이 끊기면 `unknown`으로 다루고, 요청 접수·모델 응답·연구 완료를 구별합니다. 실험적 app-server를 사용하며 대규모·장기 운영은 검증하지 않았습니다. 0.4.0 웹 운영 당시 자동 테스트 207개를 통과했습니다. Codex 0.154.0에서는 Work 담당 생성·동일 ID 재사용과 Chrome의 실제 연결·승인·응답·파일 열람·새로고침을, 0.163.0에서는 모델 목록과 Main 모델·추론 강도·Fast 변경 후 실제 응답 및 표준 모드 복귀를 확인했습니다. 새 배치와 모델 선택 UI는 Chrome의 테스트 HTTP API로 검증했고 전역 설정 파일의 해시는 동일했습니다. [검증 기록](verification.md), [App Server 문서](https://learn.chatgpt.com/docs/app-server)
+
+## 공용 공장과 연구 방
+
+```text
+~/Desktop/house/                 Git으로 관리하는 공장 코드
+├── bin/house                    터미널 진입점
+├── skill/                       Codex 스킬과 공통 Python 엔진
+│   ├── SKILL.md
+│   ├── references/              방별 작업법·업데이트 검토 절차
+│   └── scripts/house_engine/
+├── install.py
+├── scripts/weekly_scan.py
+├── tests/                       동작·보존·업데이트 검증
+├── docs/
+├── shared/ → 공용 상태           아래 공용 데이터 위치의 바로가기, Git 제외
+│   ├── config.json              새 프로젝트의 기본 릴리스
+│   ├── templates/               초기 양식
+│   ├── skills/store/            검토를 통과한 스킬의 고정 복사본
+│   └── releases/<version>/      방 지침·양식·스킬 연결·해시
+├── workshop/ → 업데이트 작업실   공용 데이터 위치의 바로가기, Git 제외
+│   ├── scans/                   GitHub 탐색 결과와 오류
+│   ├── candidates/              탐색 후보 기록·정확한 revision의 staged 스킬
+│   ├── validation/              내용 검토·대표 작업 검증 증거
+│   ├── notifications/           변화·적용·실패 기록
+│   └── schedule.json
+└── runtime/ → 실행 기록          공용 데이터 위치의 바로가기, Git 제외
+
+/path/to/research-project/       사용자 프로젝트: 원래 파일 보존
+├── house-data/                  house offload로 옮긴 원본 데이터 (자체 .gitignore로 git 제외)
+└── house/                       텍스트 기록 (house track으로 git 추적)
+    ├── HOUSE.md / AGENTS.md / hive.lock.json / .gitignore
+    ├── research.json              범위·필수 입력·과학적 기준 소유권·의존성·보존 정책
+    ├── house-data.json          옮긴 원본의 위치·크기·목록 해시
+    ├── main/
+    │   ├── why.md / target.md / design.md
+    │   ├── method.md / reference.md / results.md
+    │   ├── decisions.md / work.md / handoff.md
+    │   ├── designs/ / jobs/
+    │   └── sessions/<native-chat-id>/  채팅별 인계·작업 기록 (모든 방 공통)
+    ├── literature/
+    │   ├── GUIDE.md / reference.md
+    │   └── reference/ / extract/
+    ├── work/
+    │   └── GUIDE.md / data/ / src/
+    ├── output/
+    │   └── summary.md
+    └── discussion/
+        └── GUIDE.md / requests/
+```
+
+공용 데이터는 macOS에서 `~/Library/Application Support/House`에 저장합니다. Desktop의 세 바로가기로 같은 파일을 열 수 있습니다. 주간 작업도 이 위치에 저장한 실행 파일을 사용하므로 백그라운드에서 Desktop 접근 권한을 요구하지 않습니다. Linux 기본 데이터 위치는 `~/.local/share/house`입니다.
+
+모든 방에는 `ROOM.md`가 있습니다. 모델 작업을 실제로 시작하면 `work/model_v1.ipynb`와 `model_v1.md`를 만들고, 실행별 결과는 `output/model_v1/run-001/`의 `figure/`, `output/`, `results.md`, `run.json`으로 연결합니다. Discussion은 `council-model_v1.md` 등에 문헌·구현·결과를 근거로 개선안을 기록하며, Main이 결정한 후 다음 버전에 반영합니다.
+
+Main은 literature·work·output·discussion에 각 한 명의 담당 에이전트를 두고, 필요한 방부터 작업을 맡깁니다. 같은 방의 후속 작업은 기존 ID로 보내고 필요하면 재개합니다. 신뢰 검토를 통과한 생성 훅과 깊이 제한으로 기본 worker/explorer, 작업마다 새 에이전트 생성, 하위 에이전트의 재귀 생성을 제한합니다. 적용 방식은 [방 지침](../skill/references/rooms.md)에 설명합니다. 목표·입력 파일·허용 산출물·완료 기준을 지정하고 공유 기록의 작성자를 한 명으로 정합니다.
+
+생성 결과 훅이 누락되면 같은 native 호출의 저장된 결과에서 ID나 확인된 실패를 복구합니다. 식별할 수 없는 결과는 예약을 유지하므로 `/subagents`에서 확인합니다. 시간이 지났다는 이유로 새 에이전트를 만들지는 않습니다.
+
+foreground CLI에서는 대화와 `/subagents`로, 웹에서는 고정된 다섯 자리를 눌러 작업을 봅니다. 방 에이전트의 기록과 작업은 `<room>/sessions/<main-chat-id>/agents/<agent-id>/`에 둡니다. 별도 터미널의 `house sessions --watch`는 기록된 세션 상태를 읽어 보여 줍니다. 터미널 다섯 개를 자동으로 열거나 항상 실행되는 방별 서비스를 만들지는 않습니다.
+
+Finder나 VS Code에서 해당 프로젝트의 `house` 폴더를 열어 두면 실제 생성·수정되는 파일을 볼 수 있습니다. 기존 연구를 완료 상태로 임의 분류하거나 이동하는 기능은 수행하지 않습니다.
+
+## 채팅별 작업과 인계
+
+`house start`·`house room`은 기존처럼 해당 방을 `--cd`로 지정해 Codex를 foreground에서 실행합니다. 웹 모드도 실행별 `-c` 설정으로 native hooks와 방 역할을 연결하며 전역 Codex 설정 파일은 바꾸지 않습니다. 훅은 Codex의 신뢰 검토를 따릅니다. 0.3.0의 자동 기록은 House CLI·웹 연동으로 시작한 채팅에 적용됩니다. 0.4.2에서는 프로젝트 connect 경로도 추가했습니다. 앱에서 `$house`만 호출한 채팅에 훅이 설치됐다고 간주하지 않습니다. [공식 Hooks 문서](https://learn.chatgpt.com/docs/hooks)
+
+`SessionStart`는 `house/<room>/sessions/<native-chat-id>/`에 `SESSION.md`, `handoff.md`, `session.json`, `events.jsonl`, `work/`를 만듭니다. 같은 native ID의 resume·compact는 같은 폴더와 관측 누계를 이어 씁니다. 폴더는 공유 연구 트리 안의 메모·작업 공간이며, 격리된 git worktree나 계산 체크포인트가 아닙니다.
+
+문맥 **70% 이상**을 최근 관측하면 인계 준비를 안내합니다. 비율은 마지막 `token_count`의 `last_token_usage.total_tokens / model_context_window`이며 누적 청구 토큰을 쓰지 않습니다. transcript는 비안정 형식의 보조 인터페이스라 최대 2MiB만 읽고, 정보가 없으면 `unknown`으로 표시합니다. 이 값은 실시간 점유율이나 Codex UI와의 일치를 보장하지 않습니다. 0.154.0에서 짧은 세션은 확인했지만 장기 세션과 반복 압축의 관측 완전성은 검증하지 않았습니다.
+
+자동 압축은 완료된 `PostCompact`의 `trigger=auto`만 셉니다. 수동 압축은 10회 기준에서 제외하며, 중간에 연동한 기존 채팅은 관측 시작 이후 횟수만 압니다. 이벤트를 식별할 수 없는 중복 전달은 중복 집계될 수 있습니다. 70%와 10회는 House 운영 기준이며 모델 품질의 공식 임계치가 아닙니다.
+
+인계 파일은 **목표·확정 결정·실행 중인 작업·다음 행동** 네 제목 아래 실제 내용을 적고 전체 8,000자 이내로 유지합니다. 작성 후 checkpoint 명령으로 검증한 복사본을 `snapshots/`에 보관합니다. Main은 `main/handoff.md`도 갱신하고, 새 채팅은 이 파일과 같은 방의 최근 저장 snapshot을 읽습니다.
+
+```sh
+house sessions --room main          # 읽기 전용; --json으로 구조화 출력
+house sessions --watch              # 읽기 전용; Ctrl-C는 상태 보기만 종료
+house session checkpoint CHAT_ID --room main --project /path/to/research-project
+house session checkpoint CHAT_ID --room main --boundary --project /path/to/research-project
+```
+
+`CHAT_ID`는 시작 훅이 알려 준 실제 native ID를 사용합니다. `--boundary`는 실제 작업 구간을 마쳤을 때만 붙입니다. 자동 압축 10회 이상이며 인계를 저장한 작업 경계에서 한 번 새 채팅을 권합니다. 단순 응답 종료나 `Stop`으로 자동 종료하지 않고, 실행 중인 계산을 중단하거나 새 채팅을 자동 생성하지 않습니다. `house session hook --room ROOM`은 CLI가 연결하는 native hook JSON 입력용입니다.
+
+## 기록을 가볍게 유지하기
+
+- **상태 줄**: 문서의 `상태: … <!-- house:status -->` 줄은 House가 관리합니다. 내용을 쓰면 이 줄을 현재 상태로 바꿉니다. 초기 문구를 남겨 두고 해명 문장을 덧붙이지 않습니다. `house check`는 내용이 생겼는데 상태 줄이 그대로인 문서를 알려 줍니다.
+- **work와 handoff**: `main/work.md`는 날짜별 누적 로그, `main/handoff.md`는 매 작업 종료 때 전체를 다시 쓰는 현재 상태(8,000자 이내)입니다. 지난 내용은 work.md와 git 이력에 남습니다.
+- **원본 데이터 분리**: 체크포인트·단계별 배열·대량 로그는 house/ 밖에 둡니다. 이동 전 보존 목적·선언된 의존성·쓰기 범위를 확인합니다. 계약이 호환 링크를 금지하면 `--no-link`를 사용하며, 그 이동으로 선언된 입력/참조가 끊기면 거부합니다. `.md` 기록과 최근 변경 출력의 기존 보호도 유지합니다. 크기·기록 길이·나이만으로 이동하거나 아카이브하지 않습니다.
+- **git 추적**: house/의 텍스트 기록만 커밋합니다. 프로젝트가 git 저장소가 아니면 house/에 저장소를 만들고, 저장소 안이면 house/ 경로만 커밋해 다른 staged 변경은 건드리지 않습니다. 10MB 넘는 파일, 합계 200MB, 5,000개를 넘는 추가는 거부합니다. house/.gitignore는 상위 프로젝트의 ignore 규칙이 방 폴더를 가리지 않게 다시 포함합니다.
+
+```sh
+house check                                   # 옮길 후보·git·상태 줄·handoff 길이
+house offload output/model_v1/run-001/cases --no-link --reason '합의한 보존 목적'
+house offload --suggested --no-link --reason '합의한 보존 목적' --dry-run
+house track                                   # git 추적 시작 (첫 커밋)
+house save -m 'model_v1 run-002 결과 정리'      # house/ 기록만 커밋
+```
+
+## 이전 버전 프로젝트 업그레이드
+
+현재 엔진을 처음 실행하면 외부 스킬 연결이 없는 이전 공용 기본값을 한 번 갱신합니다. 기본값에 검토된 외부 스킬이 연결되어 있거나 이후 `rollback`한 경우에는 바꾸지 않습니다. 기존 0.3.0 프로젝트를 포함해 프로젝트의 고정 버전은 강제로 바꾸거나 migrate하지 않습니다. CLI·웹 세션 운영 정책은 실행 중인 현재 엔진이 적용하고, 방의 연구 지침은 프로젝트가 고정한 릴리스를 유지합니다. 프로젝트별 구조 전환은 아래 순서를 따릅니다.
+
+```sh
+cd /path/to/research-project
+house check                        # 현재 상태 확인
+house migrate --dry-run            # 바뀔 파일 목록 (변경 없음)
+house migrate                      # 적용: house/main/jobs/house-migrate-*/REPORT.md 생성
+house research check              # 새 계약의 실제 범위·입력·보존 정책을 확인
+house offload --suggested --no-link --reason '합의한 보존 목적' --dry-run
+house offload --suggested --no-link --reason '합의한 보존 목적' # 의존성과 실행 상태 확인 후
+house track
+```
+
+`migrate`가 바꾸는 것은 House 소유 부분뿐입니다. 사용자가 손대지 않은 House 파일(ROOM.md, HOUSE.md, AGENTS.md, GUIDE.md, 빈 템플릿)은 새 버전으로 교체하고, 내용이 생긴 문서는 0.1.0 초기 상태 문구 한 줄만 `상태: 기록 있음 — 다음 작업에서 현재 상태로 갱신 필요 <!-- house:status -->`로 바꿉니다. 바꾼 파일의 원본은 `REPORT.md` 옆 `previous/`에, 고정 버전 변경은 `hive.lock.json`의 history에 남습니다. 상태 줄의 실제 내용, 템플릿 해명 문장 정리, 긴 handoff 다시 쓰기는 연구 내용을 읽어야 하므로 REPORT.md의 요청 예시로 Codex에 맡깁니다.
+
+## 두 종류의 업데이트
+
+**공장 프로그램 자체**를 다른 컴퓨터나 세션에서 수정한 뒤 가져오기:
+
+```sh
+cd ~/Desktop/house
+git pull --ff-only
+PYTHONPATH=skill/scripts python3 -m unittest discover -s tests -v
+python3 install.py --weekly    # 주간 실행 파일도 최신 코드로 등록 (macOS)
+```
+
+명령과 스킬이 저장소를 가리키므로 새 실행부터 변경된 코드를 사용합니다. 실행 중인 Codex 작업은 종료 후 다시 시작합니다. 로컬 수정이 있으면 먼저 검토해 커밋합니다. `shared/`, `workshop/`, `runtime/`, 연구 데이터는 Git 동기화 대상이 아니므로 다른 컴퓨터에 복제되지 않습니다.
+
+**방에서 사용하는 외부 스킬**을 탐색·검토·적용하기:
+
+```sh
+house update                   # GitHub 탐색 후 Codex에서 검토·적용 작업
+house update --scan-only       # 네트워크 탐색과 기록만 수행
+house update --room literature # 특정 방에 집중
+```
+
+현재 채팅에서는 `$house update`를 사용합니다. 일반적인 방별 키워드로 GitHub 저장소와 주간 Trending을 찾고, 연결된 스킬의 upstream revision도 확인합니다. 인기와 새 커밋은 검토 후보를 뜻합니다. 자동 설치나 품질 보증을 뜻하지 않습니다.
+
+실제 적용은 `stage → review → apply` 순서입니다. 정확한 커밋의 스킬을 가져와 내용을 검토하고 대표 작업을 실행한 증거를 보관한 다음 새 공용 릴리스를 만듭니다. 기존 프로젝트의 `hive.lock.json`은 유지됩니다. 상세 명령과 검토 형식은 [스킬 업데이트 지침](../skill/references/update.md)에 있습니다.
+
+```sh
+house skills rollback 0.1.0
+house pin VERSION --reason '이 프로젝트를 새 스킬 구성으로 전환하는 이유'
+```
+
+`rollback`은 새 프로젝트의 공용 기본값을 되돌립니다. `pin`은 현재 프로젝트에만 명시적으로 적용하며 연구 기록을 덮어쓰지 않습니다. 프로젝트에 복사된 `ROOM.md`의 사용자 편집도 보존하고, 실행은 잠금 버전의 공용 지침과 함께 읽습니다.
+
+초기 설치는 다섯 방의 기본 연구 지침을 제공합니다. 외부 literature/council/superpowers 스킬은 자동으로 복제되지 않으며, 검토 후 해당 방의 bindings에 추가합니다. 기록 파일의 해시 검사는 변조를 감지하는 기능이고 검토자의 판단 자체를 인증하는 시스템은 아닙니다.
+
+## 주간 탐색과 알림
+
+설치 시 `--weekly`를 사용하면 macOS의 `research.house.weekly` 작업을 등록합니다. 주간 작업은 모델을 호출하거나 스킬을 자동 적용하지 않습니다. 새 후보·upstream 변경·오류를 탐색해 `workshop/`에 기록하고, 새 알림만 macOS에 제출합니다. 변화가 없으면 알림을 보내지 않습니다.
+
+적용 기록은 `house v<version> #literature skill update` 같은 형식을 사용합니다. 화면 배너 표시는 macOS 알림 설정에 따르며, 로그는 항상 로컬에 남습니다. 컴퓨터가 꺼져 있거나 로그아웃된 동안 정시 실행은 보장되지 않습니다.
+
+```sh
+launchctl print gui/$(id -u)/research.house.weekly
+launchctl bootout gui/$(id -u)/research.house.weekly  # 현재 로그인 세션에서 중지
+```
+
+영구 중지는 위 명령 후 `~/Library/LaunchAgents/research.house.weekly.plist`를 다른 곳으로 옮깁니다. 다시 켜려면 `python3 install.py --weekly`를 실행합니다.
+
+## 다른 위치와 진단
+
+코드 저장소는 `~/Desktop/house`, 기본 공용 데이터는 macOS에서 `~/Library/Application Support/House`입니다. 주간 작업의 사용자 지정 데이터 경로는 Desktop·Documents·Downloads 같은 macOS 보호 폴더를 피합니다. 별도 위치는 매 세션의 `HOUSE_HOME` 환경 변수 또는 `--home`으로 지정합니다. `install.py --home`만으로 셸·Codex의 환경을 바꾸지는 않습니다. 프로젝트를 만든 뒤에는 해당 프로젝트가 기록한 공용 경로를 우선 사용합니다.
+
+`house room main --dry-run --json`은 폴더를 초기화하고 실제 Codex 실행 인자를 표시하지만 Codex를 실행하지 않습니다. `house context main --json`은 현재 채팅에서 사용할 지침을 출력합니다. Codex 실행 종료는 연구 완료와 구별해 기록합니다.
+
+동일 방의 중복 터미널 실행은 잠금으로 제한합니다. 문서 편집기와 임의의 에이전트까지 자동 잠금하는 것은 아니므로, 같은 파일을 병렬 작업에 중복 배정하지 않습니다. 외부 검색은 네트워크·GitHub rate limit의 영향을 받으며, 실패는 오류로 기록합니다. `HOUSE_GITHUB_TOKEN` 또는 `GITHUB_TOKEN`을 설정하면 GitHub API 요청에만 사용합니다. 토큰을 이 저장소에 저장하지 않습니다.
+
+검증 명령: `PYTHONPATH=skill/scripts python3 -m unittest discover -s tests -v`
+
+통합 근거: [Codex CLI](https://learn.chatgpt.com/docs/cli/reference), [GitHub 검색 API](https://docs.github.com/en/rest/search/search), [GitHub 커밋 API](https://docs.github.com/en/rest/commits/commits).

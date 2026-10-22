@@ -1,0 +1,29 @@
+{
+  "captured_at": "2026-10-22T08:34:42.768770+00:00",
+  "source_commit": "b371cb29561fa89b4c447f2f0342c0361bac89c2",
+  "source_base_commit": "9bc5e8818a440892187530511dbbc970d401b57f",
+  "workflow_run": "https://github.com/ISIF-3/house/actions/runs/39748706907",
+  "browser": "Google Chrome 155.0.8059.84",
+  "viewport": {
+    "width": 1440,
+    "height": 1720,
+    "device_scale_factor": 1
+  },
+  "page": "Unmodified skill/web/index.html, style.css and app.js served from a temporary loopback static HTTP server.",
+  "state": "Disconnected, without an authentication token. No model, conversation, fixture state or research data was supplied.",
+  "source_sha256": {
+    "index.html": "e1cc97cc4abfe41a5ea184ffac8d970b2518e37a20a964332067e6a33400b2ef",
+    "style.css": "4e894163f74e6d7b54f1659cd72c6594281dbe34eb5a36a42e34b81607dec99f",
+    "app.js": "b2ad6a3cc2e4ad44652743c6ae313c72f2f91b000e909a00a82b1f920f40cd23"
+  },
+  "screenshot": {
+    "path": "docs/media/house-web.png",
+    "sha256": "4cbf1e4cfd0bc5d5e930ea90efa216733820620605c1f69d43bc98919afdb7d7",
+    "bytes": 207952
+  },
+  "fonts": {
+    "package": "fonts-noto-cjk",
+    "korean_match": "Noto Sans CJK KR"
+  },
+  "image_edits": "none"
+}
