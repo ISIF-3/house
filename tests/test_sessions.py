@@ -84,6 +84,29 @@ class SessionTests(unittest.TestCase):
         self.assertIn(str(self.root / 'main/handoff.md'), context)
         self.assertEqual(output['hookSpecificOutput']['hookEventName'], 'SessionStart')
 
+    def test_tool_threshold_warning_has_native_and_chat_delivery(self):
+        self.start()
+        self.token(70)
+        output = self.event('PostToolUse')
+        self.assertIn('70.0%', output['systemMessage'])
+        self.assertEqual(output['hookSpecificOutput']['hookEventName'], 'PostToolUse')
+        self.assertIn('70.0%', output['hookSpecificOutput']['additionalContext'])
+        self.assertIn('다음 사용자용 메시지', output['hookSpecificOutput']['additionalContext'])
+        self.assertNotIn('decision', output)
+        self.assertNotIn('continue', output)
+        self.assertEqual(self.event('PostToolUse'), {})
+
+    def test_stop_warning_is_forwarded_at_next_supported_event_only_once(self):
+        self.start()
+        self.token(75)
+        output = self.event('Stop')
+        self.assertIn('75.0%', output['systemMessage'])
+        self.assertNotIn('hookSpecificOutput', output)
+        forwarded = self.event('PostToolUse')
+        self.assertIn('75.0%', forwarded['hookSpecificOutput']['additionalContext'])
+        self.assertNotIn('systemMessage', forwarded)
+        self.assertEqual(self.event('PostToolUse'), {})
+
     def test_resume_and_compact_start_keep_counts_and_surface_review(self):
         self.start()
         self.auto()
@@ -295,6 +318,9 @@ class SessionTests(unittest.TestCase):
         self.event('UserPromptSubmit')
         self.auto()
         self.assertIsNone(self.state()['context_percent'])
+        output = self.event('UserPromptSubmit')
+        self.assertNotIn('75.0%', output['hookSpecificOutput']['additionalContext'])
+        self.assertIn('자동 압축 1회', output['hookSpecificOutput']['additionalContext'])
         self.assertEqual(self.event('UserPromptSubmit'), {})
         self.token(71)
         self.assertIn('systemMessage', self.event('UserPromptSubmit'))
@@ -307,10 +333,21 @@ class SessionTests(unittest.TestCase):
         replacement = self.base / 'replacement.jsonl'
         replacement.write_bytes(self.transcript.read_bytes())
         os.replace(str(replacement), str(self.transcript))
+        output = self.event('UserPromptSubmit')
+        self.assertNotIn('75.0%', output['hookSpecificOutput']['additionalContext'])
         self.assertEqual(self.event('UserPromptSubmit'), {})
         self.assertIsNone(self.state()['context_percent'])
         self.token(71)
         self.assertIn('systemMessage', self.event('UserPromptSubmit'))
+
+    def test_compaction_clears_an_undelivered_old_context_warning(self):
+        self.start()
+        self.token(75)
+        self.event('Stop')
+        self.auto()
+        output = self.event('PostToolUse')
+        self.assertNotIn('75.0%', output['hookSpecificOutput']['additionalContext'])
+        self.assertIn('자동 압축 1회', output['hookSpecificOutput']['additionalContext'])
 
     def test_large_transcript_tail_ignores_partial_bad_and_oversized_lines(self):
         self.start()

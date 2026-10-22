@@ -95,6 +95,9 @@
     if (session?.count_scope === "observed_since_attach") notes.push("연동 이후 관측한 횟수입니다.");
     if (session?.review_required === true) notes.push("자동 압축 후 인계 검토가 필요합니다.");
     if (session?.recommended_at) notes.push("인계가 저장되어 새 채팅을 권고한 상태입니다.");
+    for (const alert of session?.alerts || []) {
+      if (!alert.resolved_at && typeof alert.message === "string") notes.push(alert.message);
+    }
     $("health-note").textContent = notes.join(" ") || (session ? "최근 저장된 관측이며 현재 문맥과 차이가 있을 수 있습니다." : "측정값이 제공되지 않아 현재 사용량을 알 수 없습니다.");
   }
   function modelChoices() {

@@ -67,6 +67,19 @@ Resolve `scripts/house.py` relative to this SKILL.md. It uses Python 3.9+ and th
 
 **Do not run interactive `house`, `house start`, or `house room` inside this chat.** Those commands launch another Codex terminal session. The `init` and `context` commands let this conversation remain the active Main or room.
 
+## Connect an existing client
+
+When the user requests automatic session alerts in an IDE, CLI or desktop app,
+follow [project connection](references/connections.md): inspect connect --dry-run,
+apply within the authorized task bundle, then distinguish registration from actual
+callbacks and visible warnings using doctor. Loading the skill alone still does
+not attach hooks. Never grant native hook trust or change project pins to make
+a diagnostic look successful.
+
+House-owned launchers keep their invocation callback while ordinary clients use
+the project callback. Only the selected producer records events; both use the same
+v2 bridge. This preserves the launcher's fallback without double-counting.
+
 ## Native CLI sessions
 
 The `house start` / `house room` and `house web` launchers inject invocation-scoped native hooks and room roles; they do not change global Codex config or bypass native hook trust review. Calling `$house` in an existing app chat does not attach those automatic hooks. Do not claim automatic session tracking without that integration. The foreground path keeps the room's `--cd`; `/subagents` shows child work. Web mode shows the same five fixed rooms in the browser. A separate terminal can run read-only `house sessions --watch` (or `--room ROOM`, `--json`). These commands do not open five terminals.

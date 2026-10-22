@@ -6,10 +6,33 @@ import os
 from pathlib import Path
 import re
 import tempfile
+import time
+import shlex
 
 
 class HouseError(Exception):
     """An actionable failure that a command may show without a traceback."""
+
+
+def windows_shell_command(argv):
+    """Quote every argument for Codex's default Windows cmd.exe hook shell.
+
+    CRT quoting alone leaves no-space cmd metacharacters unquoted. Expansion
+    characters cannot be safely passed by this representation, so reject them
+    rather than expanding an unintended path or command.
+    """
+    values = []
+    for value in argv:
+        if not isinstance(value, str) or any(char in value for char in ('"', '%', '!', '\r', '\n', '\0')):
+            raise HouseError('Windows hook arguments cannot contain quotes, %, ! or control newlines')
+        tail = len(value) - len(value.rstrip('\\'))
+        values.append('"' + value + '\\' * tail + '"')
+    return ' '.join(values)
+
+
+def shell_command(argv):
+    """Format a POSIX shell command or the default Windows cmd.exe command."""
+    return windows_shell_command(argv) if os.name == 'nt' else shlex.join(argv)
 
 
 def validate_id(value: str) -> str:
@@ -81,22 +104,43 @@ def read_json(path: Path) -> dict:
 
 
 @contextmanager
-def locked(path: Path):
-    """Hold a nonblocking POSIX advisory lock; retain its inode after release."""
-    try:
+def locked(path: Path, timeout=0):
+    """Hold an OS lock; keep the lock file and optionally wait a bounded time."""
+    if not isinstance(timeout, (int, float)) or not 0 <= timeout <= 10:
+        raise HouseError("Lock timeout must be between 0 and 10 seconds")
+    if os.name == 'nt':
+        import msvcrt
+        def acquire(descriptor):
+            os.lseek(descriptor, 0, os.SEEK_SET)
+            msvcrt.locking(descriptor, msvcrt.LK_NBLCK, 1)
+        def release(descriptor):
+            os.lseek(descriptor, 0, os.SEEK_SET)
+            msvcrt.locking(descriptor, msvcrt.LK_UNLCK, 1)
+    else:
         import fcntl
-    except ImportError as exc:
-        raise HouseError("House requires POSIX file locks (macOS or Linux)") from exc
+        def acquire(descriptor):
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        def release(descriptor):
+            fcntl.flock(descriptor, fcntl.LOCK_UN)
     path = Path(path)
     path = safe_path(path.parent, path.name)
     descriptor = None
     acquired = False
     try:
         descriptor = os.open(str(path), os.O_CREAT | os.O_RDWR | getattr(os, "O_NOFOLLOW", 0), 0o600)
-        try:
-            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError as exc:
-            raise HouseError("House resource is in use: {}".format(path)) from exc
+        if os.name == 'nt' and os.fstat(descriptor).st_size == 0:
+            os.write(descriptor, b'\0')
+        deadline = time.monotonic() + timeout
+        while True:
+            try:
+                acquire(descriptor)
+                break
+            except OSError as exc:
+                if exc.errno not in (11, 13, 35, 36):
+                    raise
+                if time.monotonic() >= deadline:
+                    raise HouseError("House resource is in use: {}".format(path)) from exc
+                time.sleep(min(0.02, max(0, deadline - time.monotonic())))
         acquired = True
         yield
     except OSError as exc:
@@ -104,5 +148,5 @@ def locked(path: Path):
     finally:
         if descriptor is not None:
             if acquired:
-                fcntl.flock(descriptor, fcntl.LOCK_UN)
+                release(descriptor)
             os.close(descriptor)

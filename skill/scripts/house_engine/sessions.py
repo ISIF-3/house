@@ -167,10 +167,19 @@ def _observe_tokens(state, records, identity):
                                     'window': window, 'at': _now()})
 
 
-def _output(name, instructions='', message=''):
+MODEL_CONTEXT_EVENTS = ('SessionStart', 'UserPromptSubmit', 'PostToolUse')
+
+
+def _output(name, instructions='', message='', notice=''):
     output = {}
-    if name in ('SessionStart', 'UserPromptSubmit') and instructions:
-        output['hookSpecificOutput'] = {'hookEventName': name, 'additionalContext': instructions}
+    context = instructions
+    if notice:
+        context = ('House 관측 알림 — 다음 사용자용 메시지에서 아래 경고를 짧게 한 번 표시하세요. '
+                   '일반 채팅 메시지로 전달하며 native 팝업이 표시됐다고 주장하지 마세요. '
+                   '현재 작업이나 계산을 종료하지 말고 인계를 준비하세요.\n' + notice
+                   + ('\n' + instructions if instructions else ''))
+    if name in MODEL_CONTEXT_EVENTS and context:
+        output['hookSpecificOutput'] = {'hookEventName': name, 'additionalContext': context}
     elif instructions:
         message = instructions + ('\n' + message if message else '')
     if message:
@@ -293,6 +302,7 @@ def handle_hook(root, room, event):
             state[field] += 1
             state.update(context_percent=None, context_warning_emitted=False,
                          token_floor={'identity': identity, 'offset': size})
+            state['pending_chat_notices'] = []
             if event['trigger'] == 'auto':
                 state['review_required'] = True
                 message = '자동 압축 {}회 관측: 세션 인계를 검토하세요. 압축 횟수만으로 새 채팅을 열지 않습니다.'.format(state[field])
@@ -321,11 +331,14 @@ def handle_hook(root, room, event):
         if percent is not None and percent >= 70 and not state['context_warning_emitted']:
             state['context_warning_emitted'] = True
             message = '컨텍스트 {:.1f}% 관측: 다음 작업 전에 세션 인계를 준비하세요.'.format(percent)
-            if name in ('SessionStart', 'UserPromptSubmit'):
-                instructions += '\n' + message
+        pending = state.get('pending_chat_notices', [])
+        if message and message not in pending:
+            pending.append(message)
+        notice = '\n'.join(pending) if name in MODEL_CONTEXT_EVENTS else ''
+        state['pending_chat_notices'] = [] if notice else pending
         if name != 'PreCompact':
             _save(directory, state, name)
-        return _output(name, instructions, message)
+        return _output(name, instructions, message, notice)
 
 
 def finish_launch(root, room, launch_id, exit_code):

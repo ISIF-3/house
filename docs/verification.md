@@ -113,3 +113,38 @@
 - `codex --version`은 0.163.0으로 확인했으나 실제 로그인 모델 세션의 새 훅·대규모 입력·장기 작업은
   이번에 실행하지 않았다. 훅 검사는 최대 60초이며 전체 입력 해시 검사 비용은 파일 크기에 비례한다.
   이 환경에 conda/pymat가 없어 House 자체의 표준 Python 테스트를 사용했으며 과학 계산은 하지 않았다.
+
+## 0.4.2 채팅 경고 전달 · 2026-10-22
+
+사용자가 훅을 허용한 뒤 새 대화를 열었으나, 기존 대화 ID만 허용하던 로컬 relay가 새 대화의
+이벤트를 거부했다. 명시한 새 대화의 ID·cwd·transcript를 검증해 기존 등록에서 전달하도록
+수정하고 09:58:32 KST에 실제 PostToolUse 콜백을 수신했다. 다른 대화·하위 에이전트는 제외한다.
+
+그 콜백의 systemMessage 시험 경고는 사용자가 화면에서 보지 못했다고 확인했다. 따라서
+native 출력 준비를 화면 표시 성공으로 보고하지 않는다. 이후 동일한 현재 대화에서
+PostToolUse의 hookSpecificOutput.additionalContext로 일회성 시험을 실행했다. hook 실행 중
+생성한 식별자 `HOUSE-DELIVERY-5da7bbf8cb3c`가 실제 추가 developer 문맥으로 자동 도착했고,
+다음 assistant commentary에서 그 시험 경고와 식별자를 출력했다. 이는 실제 70% 도달이 아닌
+전달 경로 시험이다. 별도 모델 세션·강제 압축·전역 hook/trust 변경은 수행하지 않았다.
+
+엔진은 native 알림을 유지하면서 SessionStart·UserPromptSubmit·PostToolUse에 채팅 경고도
+요청한다. 다른 이벤트에서 감지한 미전달 경고는 다음 지원 이벤트로 넘기며, 같은 경고·endpoint의
+추가 문맥 준비는 한 번만 기록한다. 준비 상태는 모델 수신·사용자의 화면 확인과 구분한다.
+
+- `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=skill/scripts python3 -m unittest discover -s tests -q`:
+  **323개 실행, 321개 통과, 2개 건너뜀**, 33.840초.
+- 추가 검사는 tool 경고의 두 출력 경로, 작업 비차단, Stop 경고의 지연 전달, native 재시도와
+  채팅 요청 중복 방지, 해결된 경고와 압축 전 문맥 경고의 폐기를 확인한다.
+- 현재 대화의 실제 원본 기록은
+  `/home/kjm/.local/share/house-live-session/01a16116-9f15-7231-9b94-3b6949cdbe38/`의
+  `first-callback.json`, `model-probe-emitted.json`, `continuation-repair.json`에 있다.
+  이 경로는 해당 컴퓨터의 검증 근거이며 다른 설치의 runtime 입력이 아니다.
+- 현재 Codex 0.163.0에서 해당 PostToolUse 경로를 검증했다. native 팝업, 다른 클라이언트와 OS,
+  실제 70% 도달·장기 반복 압축의 화면 표시는 이 검사로 확인하지 않았다.
+- [공식 Hooks 문서](https://learn.chatgpt.com/docs/hooks)의 systemMessage와
+  PostToolUse additionalContext 지원을 기준으로 구현했다.
+- 이후 사용자의 표시 시험 요청으로 별도 식별자 `HOUSE-DELIVERY-d63fc5d95ed3`를 실제 훅에서
+  생성해 추가 문맥으로 전달했다. 사용자가 그 식별자를 포함한 채팅 경고문을 직접 제시해
+  **채팅 본문의 표시를 확인했다**. native 팝업 표시와 실제 70% 도달은 이 확인에 포함하지 않는다.
+  원본 확인 기록은 같은 로컬 검증 폴더의
+  `display-confirmation-HOUSE-DELIVERY-d63fc5d95ed3.json`에 보존했다.

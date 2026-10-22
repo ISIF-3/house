@@ -2,17 +2,26 @@
 
 하나의 공용 공장에서 여러 연구 프로젝트를 운영합니다. 터미널의 `house`와 Codex의 `$house`는 같은 엔진과 파일을 사용합니다. 기존 프로젝트의 파일을 옮기거나 덮어쓰지 않습니다.
 
+**이 브랜치는 0.4.2 개발 버전입니다.** 처음 설치하거나 연결·경고 기능을 설정하려면
+[설치·실행·설정 안내](docs/setup.md)를 먼저 보세요. 해당 기능은 아래처럼 브랜치를 지정해 설치합니다.
+
 ## 시작
 
-macOS 또는 Linux, Python 3.9 이상, 로그인된 Codex CLI가 필요합니다. Python 외부 패키지는 필요하지 않습니다.
+macOS·Linux·WSL 또는 native Windows, Python 3.9 이상, 로그인된 Codex CLI가 필요합니다.
+Python 외부 패키지는 필요하지 않습니다. 다음은 macOS·Linux·WSL 예시이며,
+[Windows PowerShell 설치](docs/setup.md#windows-powershell)는 별도로 안내합니다.
 
 ```sh
-git clone https://github.com/ISIF-3/house.git ~/Desktop/house
-cd ~/Desktop/house
-python3 install.py --weekly
+git clone --branch feat/house-0.4.2-connect https://github.com/ISIF-3/house.git "$HOME/house"
+cd "$HOME/house"
+python3 install.py
+"$HOME/.local/bin/house" --version
 ```
 
-`--weekly`는 macOS에서 월요일 오전 9시(컴퓨터의 현지 시간)에 후보 탐색을 등록합니다. Linux에서는 이 옵션을 생략합니다. 명령은 `~/.local/bin/house`, 스킬은 `~/.agents/skills/house`에서 이 저장소로 연결됩니다. `~/.local/bin`이 PATH에 없다면 해당 경로의 명령을 직접 사용하거나 자신의 셸 설정에 추가합니다.
+명령은 `~/.local/bin/house`, 스킬은 `~/.agents/skills/house`에서 이 저장소로 연결됩니다.
+`~/.local/bin`이 PATH에 없다면 해당 경로의 명령을 직접 사용하거나 자신의 셸 설정에 추가합니다.
+macOS에서 주간 후보 탐색도 원하면 `python3 install.py --weekly`를 실행합니다.
+월요일 오전 9시(컴퓨터의 현지 시간)에 등록하며, Linux·Windows에서는 이 옵션을 생략합니다.
 
 연구할 프로젝트 폴더에서 실행합니다.
 
@@ -30,6 +39,42 @@ house web                     # 로컬 웹 연구실을 열고 브라우저에�
 Codex 앱·CLI·확장에서 프로젝트를 열고 **`$house 연구 목표를 정리하며 시작해줘`**라고 요청할 수도 있습니다. `/house`는 기본 슬래시 명령으로 등록되지 않습니다. 새 스킬이 보이지 않으면 Codex를 다시 열고 스킬 목록을 확인합니다. [Codex 스킬 문서](https://learn.chatgpt.com/docs/build-skills)
 
 Main은 연구의 이유·최종 목표를 정리하고 데이터, 방법, 평가 기준과 자원을 설명합니다. 실제 AI·통계 모델 구현은 설계에 합의한 뒤 시작합니다. 초기화 시 가짜 노트북·논문·결과·승인을 만들지 않습니다.
+
+## 현재 대화에 세션 알림 연결 (0.4.2 개발 버전)
+
+VS Code의 Codex 확장·내장 터미널, 독립 CLI, 로컬 데스크톱 앱에서 같은 프로젝트 연결을 사용합니다.
+지원되는 호스트의 project hooks에 등록하며, 설정 등록·실제 이벤트 수신·화면 경고 확인을 구분합니다.
+
+    house connect --project /path/to/project --dry-run --json
+    house connect --project /path/to/project --apply --json
+    house doctor --project /path/to/project --json
+    house doctor --project /path/to/project --native --json
+    house disconnect --project /path/to/project --apply --json
+
+connect는 프로젝트 hooks에 House 항목만 병합하며 사용자 hooks를 보존합니다. 기존 inline TOML hooks도
+관리 블록으로 연결합니다. 기본값은 계획 조회이며 --apply가 실제 등록·해제입니다. native 훅 신뢰를
+자동 승인하지 않고, 기존 프로젝트의 pin·입력·결과를 바꾸지 않습니다. 등록에는 컴퓨터별 경로가
+들어가므로 팀 공용 설정으로 그대로 커밋하지 않습니다.
+
+등록한 연구 프로젝트에서 Codex CLI를 열고 `/hooks`에서 House 훅 다섯 개의 명령을 검토해 허용합니다.
+기존 클라이언트가 설정을 다시 읽어야 하면 해당 프로젝트의 대화를 재개하거나 다시 엽니다.
+메시지나 도구 실행 뒤 `house doctor --project /path/to/project --json`의
+`event_observation`이 `observed`인지 확인합니다. 자세한 순서와 화면 예시는
+[기존 대화 연결](docs/setup.md#기존-codex-대화에-알림-연결)을 참고하세요.
+
+첫 메시지·도구 이벤트에서 기존 대화도 관측할 수 있습니다. 최근 문맥 70%에서 인계를 준비하고,
+확인 가능한 자동 압축 10회 이후 유효 인계를 저장한 작업 경계에서만 새 대화를 권합니다. 기존
+식별 불가 hook 전달 수는 확정 압축과 구분합니다. 대화·계산을 자동 종료하지 않습니다.
+
+경고는 native 알림 이벤트와 다음 채팅 메시지로 함께 전달합니다. `SessionStart`·`UserPromptSubmit`·
+`PostToolUse`에서 에이전트에게 짧은 경고 표시를 요청하며, 다른 이벤트에서 감지한 경고는 다음 지원
+이벤트까지 보관합니다. 팝업이 보이지 않는 클라이언트에서도 채팅으로 안내할 수 있지만, 출력 준비·
+실제 에이전트 수신·사용자의 화면 확인은 구분합니다. 같은 관측 경고의 채팅 전달 요청은 반복하지 않습니다.
+
+Windows 설치에는 symlink 권한을 요구하지 않는 관리된 복사와 house.cmd를 제공합니다. Windows 앱이
+WSL 소유 프로젝트를 쓸 때는 --wsl-distro로 명시적 전달을 설정할 수 있습니다. 실제 OS·클라이언트별
+검증 범위와 신뢰 확인 절차는 [연결 지침](skill/references/connections.md)에 있습니다. 로컬 파일
+접근만 가능한 클라우드 대화에 로컬 hooks가 작동한다고 주장하지 않습니다.
 
 ## 연구 범위·입력·근거 관리 (0.4.1)
 
@@ -141,7 +186,7 @@ Finder나 VS Code에서 해당 프로젝트의 `house` 폴더를 열어 두면 �
 
 ## 채팅별 작업과 인계 (0.3.0)
 
-`house start`·`house room`은 기존처럼 해당 방을 `--cd`로 지정해 Codex를 foreground에서 실행합니다. 웹 모드도 실행별 `-c` 설정으로 native hooks와 방 역할을 연결하며 전역 Codex 설정 파일은 바꾸지 않습니다. 훅은 Codex의 신뢰 검토를 따릅니다. 자동 기록은 House CLI·웹 연동으로 시작한 채팅에 적용되며, 앱에서 `$house`만 호출한 채팅에 훅이 설치됐다고 간주하지 않습니다. [공식 Hooks 문서](https://learn.chatgpt.com/docs/hooks)
+`house start`·`house room`은 기존처럼 해당 방을 `--cd`로 지정해 Codex를 foreground에서 실행합니다. 웹 모드도 실행별 `-c` 설정으로 native hooks와 방 역할을 연결하며 전역 Codex 설정 파일은 바꾸지 않습니다. 훅은 Codex의 신뢰 검토를 따릅니다. 0.3.0의 자동 기록은 House CLI·웹 연동으로 시작한 채팅에 적용됩니다. 0.4.2에서는 프로젝트 connect 경로도 추가했습니다. 앱에서 `$house`만 호출한 채팅에 훅이 설치됐다고 간주하지 않습니다. [공식 Hooks 문서](https://learn.chatgpt.com/docs/hooks)
 
 `SessionStart`는 `house/<room>/sessions/<native-chat-id>/`에 `SESSION.md`, `handoff.md`, `session.json`, `events.jsonl`, `work/`를 만듭니다. 같은 native ID의 resume·compact는 같은 폴더와 관측 누계를 이어 씁니다. 폴더는 공유 연구 트리 안의 메모·작업 공간이며, 격리된 git worktree나 계산 체크포인트가 아닙니다.
 

@@ -101,6 +101,43 @@ class WebTests(unittest.TestCase):
         controller.start()
         return controller, factory
 
+    def test_connected_project_uses_common_observations_for_web_warning_state(self):
+        from house_engine import connections
+        plan = connections.connect(self.root, apply=True)
+        controller, factory = self.controller()
+        factory.transcript.write_text(json.dumps({'type':'event_msg','payload':{
+            'type':'token_count','info':{'last_token_usage':{'total_tokens':70},'model_context_window':100}}})+'\n')
+        output = connections.handle_event(self.root, {'hook_event_name':'UserPromptSubmit',
+            'session_id':'native-web','transcript_path':str(factory.transcript)}, plan['connection_id'])
+        self.assertIn('70', output['systemMessage'])
+        value = controller.snapshot()['session']
+        self.assertEqual(value['context_percent'],70)
+        self.assertTrue(any(alert['kind']=='context_warning' for alert in value['alerts']))
+        self.assertEqual(value['native_session_id'],'native-web')
+
+    def test_connected_web_ambiguity_is_not_resolved_by_newest_record(self):
+        from house_engine import connections
+        plan = connections.connect(self.root, apply=True)
+        controller, factory = self.controller()
+        for thread in ('native-thread-one','native-thread-two'):
+            connections.handle_event(self.root, {'hook_event_name':'UserPromptSubmit',
+                'native_thread_id':thread,'session_id':'native-web',
+                'transcript_path':str(factory.transcript)},plan['connection_id'])
+        state = controller.snapshot()
+        self.assertIsNone(state['session'])
+        self.assertIn('모호',state['error'])
+
+    def test_connected_web_prefers_actual_thread_over_provisional_observation(self):
+        from house_engine import connections
+        plan = connections.connect(self.root, apply=True)
+        controller, factory = self.controller()
+        event = {'hook_event_name':'UserPromptSubmit','session_id':'native-web',
+                 'transcript_path':str(factory.transcript)}
+        connections.handle_event(self.root,event,plan['connection_id'])
+        connections.handle_event(self.root,dict(event,native_thread_id=controller.thread_id),plan['connection_id'])
+        state = controller.snapshot()
+        self.assertEqual(state['session']['native_thread_id'],controller.thread_id)
+
     def wait_for(self, predicate):
         deadline = time.monotonic() + 2
         while not predicate() and time.monotonic() < deadline:

@@ -17,7 +17,7 @@ import uuid
 import webbrowser
 
 from .project import ROOMS
-from .storage import HouseError, atomic_json, locked, read_json, safe_path, validate_id
+from .storage import HouseError, atomic_json, locked, read_json, safe_path, validate_id, shell_command
 from . import sessions
 
 LABELS = {'main': 'Main · 감독관', 'literature': 'Literature · 문헌', 'work': 'Work · 계산·분석',
@@ -82,7 +82,11 @@ def _catalog_model(item):
 def _hook_commands(root):
     base = [sys.executable, str(Path(__file__).resolve().parents[1] / 'house.py'),
             'session', 'hook', '--project', str(root), '--room', 'main']
-    return {event: shlex.join(base + ['--event', event]) for event in HOOK_EVENTS}
+    result = {event: shell_command(base + ['--event', event]) for event in HOOK_EVENTS}
+    from .connections import registered, commands
+    if registered(root):
+        result.update(commands(root, origin='launcher'))
+    return result
 
 
 def authorized(headers, port, token, api=True):
@@ -581,6 +585,21 @@ class WebController:
             if self.session_id:
                 folder = sessions.workspace(self.root, 'main', self.session_id)
                 result['session'] = read_json(safe_path(folder, 'session.json'))
+                from .connections import registered
+                if registered(self.root):
+                    from .session_bridge import observations
+                    matches = [item for item in observations(self.root)
+                               if item.get('native_session_id') == self.session_id
+                               and item.get('transcript_path') == self.transcript
+                               and not item.get('agent_id') and not item.get('parent_thread_id')]
+                    exact = [item for item in matches if item.get('native_thread_id') == self.thread_id]
+                    if len(exact) == 1:
+                        matches = exact
+                    if len(matches) == 1:
+                        result['session'] = matches[0]
+                    elif len(matches) > 1:
+                        result['session'] = None
+                        result['error'] = 'House 관측 대화 식별이 모호합니다. doctor로 연결을 확인하세요.'
                 self._restore_registry()
             for room in ROOMS:
                 bases = [safe_path(self.root, room)]
@@ -726,7 +745,8 @@ def launch_web(info, home, executable=None, port=8765, open_browser=True, resume
         emit(dict(root=str(root), mode='web', argv=argv, host='127.0.0.1', port=port, resume=resume), as_json)
         return 0
     launch_id = uuid.uuid4().hex
-    env = dict(os.environ, HOUSE_LAUNCH_ID=launch_id)
+    env = dict(os.environ, HOUSE_LAUNCH_ID=launch_id, HOUSE_CONNECTION_ROOM='main',
+               HOUSE_CONNECTION_ORIGIN='launcher')
     def factory(extra, callback):
         command = list(argv)
         for value in extra:

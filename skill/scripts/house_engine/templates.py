@@ -147,6 +147,8 @@ Work 실행 전에 house research check가 통과해야 한다. 누락·오류 �
 !/work/
 !/output/
 !/discussion/
+# 컴퓨터별 세션 연결·전달 runtime
+/main/integration/
 # 운영체제·편집기·실행 캐시
 .DS_Store
 __pycache__/

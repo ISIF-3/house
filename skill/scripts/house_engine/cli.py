@@ -16,7 +16,7 @@ import uuid
 
 from . import __version__
 from .project import ROOMS, _release, bootstrap, default_home, find_house, init_project, status
-from .storage import HouseError, atomic_json, locked, read_json, safe_path
+from .storage import HouseError, atomic_json, locked, read_json, safe_path, shell_command
 
 VERSION = __version__
 MB = 1024 * 1024
@@ -135,6 +135,29 @@ def parser():
     checkpoint.add_argument('session_id')
     checkpoint.add_argument('--room', choices=ROOMS, default='main')
     checkpoint.add_argument('--boundary', action='store_true', help='실제 작업 구간 종료로 표시')
+    for name, help_text in [('connect', '현재 프로젝트의 Codex hook 연결 등록'),
+                            ('disconnect', 'House가 등록한 project hooks만 제거')]:
+        connection = sub.add_parser(name, help=help_text)
+        common(connection, sub=True)
+        connection.add_argument('--apply', action='store_true', help='계획을 실제 프로젝트 설정에 적용')
+        if name == 'connect':
+            connection.add_argument('--wsl-distro', help='Windows 앱의 이벤트를 이 WSL 배포판 소유 엔진으로 전달')
+    doctor = sub.add_parser('doctor', help='연결 등록·관측·미검증 항목을 구분해 조회 (읽기 전용)')
+    common(doctor, sub=True)
+    doctor.add_argument('--native', action='store_true', help='모델 호출 없이 Codex app-server의 실제 훅 발견·신뢰 조회')
+    connection = sub.add_parser('connection', help='project hook 수신과 연결된 대화 인계')
+    common(connection, sub=True)
+    bridge_ops = connection.add_subparsers(dest='operation', required=True)
+    bridge_hook = bridge_ops.add_parser('hook', help='등록된 project lifecycle hook 수신')
+    common(bridge_hook, sub=True)
+    bridge_hook.add_argument('--connection-id', required=True)
+    bridge_hook.add_argument('--event', required=True)
+    bridge_hook.add_argument('--windows-paths', action='store_true')
+    bridge_hook.add_argument('--origin', choices=('project', 'launcher'), default='project')
+    bridge_save = bridge_ops.add_parser('checkpoint', help='연결된 대화의 인계를 검증·보관')
+    common(bridge_save, sub=True)
+    bridge_save.add_argument('conversation_key')
+    bridge_save.add_argument('--boundary', action='store_true')
     web = sub.add_parser('web', help='CLI에서 로컬 연구실 웹을 실행하고 브라우저로 작업 지시')
     common(web, sub=True)
     web.add_argument('--port', type=int, default=8765, help='로컬 웹 포트 (0: 빈 포트 자동 선택)')
@@ -227,15 +250,19 @@ def codex_argv(info, executable=None, update=False, overrides=()):
 def session_config(info, home, write=False):
     """Invocation-only hooks: user configuration and native compaction stay intact."""
     from .room_agents import role_overrides
-    command = shlex.join([sys.executable, str(Path(__file__).resolve().parents[1] / 'house.py'),
+    command = shell_command([sys.executable, str(Path(__file__).resolve().parents[1] / 'house.py'),
                           'session', 'hook', '--project', info['root'], '--room', info['room']])
     result = ['features.hooks=true']
+    from .connections import registered, commands
+    project_connected = registered(Path(info['root']))
+    connected_commands = commands(Path(info['root']), origin='launcher') if project_connected else {}
     for name in ('SessionStart', 'PostCompact', 'UserPromptSubmit', 'PostToolUse',
                  'PreToolUse', 'SubagentStart', 'Stop'):
+        event_command = connected_commands.get(name, command + ' --event ' + name)
         matcher = ',matcher="^(spawn_agent|Agent|send_input|resume_agent)$"' if name == 'PreToolUse' else ''
         timeout = 60 if name == 'PreToolUse' else 10
         result.append('hooks.' + name + '=[{hooks=[{type="command",command='
-                      + json.dumps(command + ' --event ' + name, ensure_ascii=False) + ',timeout=' + str(timeout) + '}]' + matcher + '}]')
+                      + json.dumps(event_command, ensure_ascii=False) + ',timeout=' + str(timeout) + '}]' + matcher + '}]')
     if info['room'] == 'main':
         contexts = {room: context(Path(info['root']), room) for room in ROOMS if room != 'main'}
         result.extend(role_overrides(Path(info['root']), home, contexts, write))
@@ -298,7 +325,8 @@ def launch(info, home, executable=None, dry_run=False, as_json=False, update=Fal
             if not update:
                 print('세션 작업 폴더: ' + info['session_workspace'], file=sys.stderr)
                 print('상태 보기: house sessions --watch --project ' + shlex.quote(info['root']), file=sys.stderr)
-            child_env = dict(os.environ, HOUSE_LAUNCH_ID=run_path.stem)
+            child_env = dict(os.environ, HOUSE_LAUNCH_ID=run_path.stem, HOUSE_CONNECTION_ROOM=room,
+                             HOUSE_CONNECTION_ORIGIN='launcher')
             child = subprocess.Popen(info['argv'], env=child_env)
             record.update(status='running', pid=child.pid)
             atomic_json(run_path, record)
@@ -341,6 +369,9 @@ def session_command(args, root):
         try:
             while True:
                 values = sessions.list_sessions(root, args.room)
+                from .session_bridge import observations
+                values += [dict(item, session_id=item['conversation_key'], status='observed_v2')
+                           for item in observations(root) if args.room is None or item['room'] == args.room]
                 if args.json:
                     emit(values, True)
                 else:
@@ -458,6 +489,35 @@ def main(argv=None):
         project = (args.project or Path.cwd()).expanduser().absolute()
         home = (args.home or default_home()).expanduser().absolute()
         command = args.command
+        if command in ('connect', 'disconnect', 'doctor', 'connection'):
+            from . import connections, session_bridge
+            root = resolve_root(project)
+            if command == 'doctor':
+                value = connections.doctor(root, args.native, args.codex)
+            elif command in ('connect', 'disconnect'):
+                if args.apply and args.dry_run:
+                    raise HouseError('--apply와 --dry-run은 함께 사용할 수 없습니다.')
+                value = (connections.connect(root, args.apply, args.wsl_distro) if command == 'connect'
+                         else connections.disconnect(root, args.apply))
+            elif args.operation == 'checkpoint':
+                value = session_bridge.checkpoint(root, args.conversation_key, args.boundary)
+                if value.get('recommend_new_session'):
+                    value['message'] = '인계를 저장했습니다. 새 대화에서 같은 프로젝트를 이어가세요. 실행 중인 계산은 유지하세요.'
+            else:
+                try:
+                    payload = sys.stdin.read(256 * 1024 + 1)
+                    if len(payload) > 256 * 1024:
+                        raise HouseError('Hook payload exceeds 256 KiB')
+                    event = json.loads(payload)
+                    if not isinstance(event, dict) or event.get('hook_event_name') != args.event:
+                        raise HouseError('Hook event does not match its registration')
+                    value = connections.handle_event(root, event, args.connection_id, args.windows_paths, args.origin)
+                except (HouseError, OSError, ValueError, TypeError, KeyError) as exc:
+                    value = {'systemMessage': 'House 연결 관측 확인 필요: ' + str(exc)}
+                print(json.dumps(value, ensure_ascii=False))
+                return 0
+            emit(value, args.json)
+            return 0
         if command == 'research':
             from . import research
             root = resolve_root(project)

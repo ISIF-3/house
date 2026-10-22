@@ -1,5 +1,14 @@
 # 변경 기록
 
+## 0.4.2 · 2026-10-22 (개발 버전)
+
+- connect·doctor·disconnect: 프로젝트 JSON/TOML hooks에 가역적 등록, 사용자 hooks 보존, 실제 callback·native 발견·신뢰·화면 전달 상태 분리.
+- 별도 v2 관측: 기존 대화 attach, thread/stream·fork·child 격리, 70% 안내, 확정 가능한 자동 압축 집계와 경계 checkpoint, 경고 전달 시도 기록. 기존 세션·연구 입력·pin은 보존.
+- House 소유 CLI/웹은 invocation callback을 유지하며 project callback을 수동 경로로 만들어 이중 관측을 방지. 일반 클라이언트는 같은 project bridge 사용.
+- Windows 파일 락·복사 설치·cmd 실행기와 명시적 Windows→WSL 경로 전달 추가. Windows·IDE·데스크톱 실제 화면 지원은 각 환경의 검증 기록과 구분.
+- native 훅 신뢰 자동 승인·전역 설정 변경·추가 모델 턴 생성은 하지 않음.
+- native 경고가 화면에 보이지 않는 경우를 위해 지원 훅의 additionalContext로 채팅 경고도 요청. 미지원 이벤트의 알림은 다음 지원 이벤트에 전달하고, 같은 경고·endpoint의 채팅 요청 중복과 오래된 문맥 경고 재전달을 방지.
+
 ## 0.4.1 · 2026-10-21
 
 - 기존 최상위·다섯 방 구조에 research.json 연결: 합의된 과업 범위·입력 해시·보호할 의미·과학적 기준의 소유자와 채택/시험 상태·의존성·보존 정책.

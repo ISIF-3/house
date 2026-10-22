@@ -18,3 +18,18 @@ jobs:
       - run: python -m unittest discover -s tests -v
         env:
           PYTHONPATH: skill/scripts
+      - run: node tests/web_session_smoke.js
+  windows-connection:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - run: python -m unittest discover -s tests -p test_connections.py -v
+      - run: python -m unittest discover -s tests -p test_session_bridge.py -v
+      - run: python -m unittest discover -s tests -p test_storage.py -v
+      - run: python -m unittest discover -s tests -p test_install.py -k windows -v
+    env:
+      PYTHONPATH: skill/scripts
+      PYTHONUTF8: '1'

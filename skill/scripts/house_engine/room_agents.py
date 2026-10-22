@@ -6,7 +6,7 @@ from pathlib import Path
 import shlex
 import sys
 
-from .storage import HouseError, atomic_json, locked, read_json, safe_path, validate_id
+from .storage import HouseError, atomic_json, locked, read_json, safe_path, validate_id, shell_command
 
 WORKER_ROOMS = ('literature', 'work', 'output', 'discussion')
 POLICY = (
@@ -43,9 +43,29 @@ def _registry(folder):
 
 
 def _is_parent(folder, event):
-    state = read_json(safe_path(folder, 'session.json'))
+    legacy = safe_path(folder, 'session.json')
+    state = read_json(legacy if legacy.exists() else safe_path(folder, 'parent-binding.json'))
     original, actual = state.get('transcript_path'), event.get('transcript_path')
     return bool(original and actual and Path(original).resolve() == Path(actual).resolve())
+
+
+def bind_parent(root, room, event):
+    """Record actual launcher callback identity without fabricating SessionStart."""
+    if room != 'main' or event.get('agent_id') or event.get('parent_thread_id'):
+        return False
+    transcript = event.get('transcript_path')
+    if not isinstance(transcript, str) or not Path(transcript).is_absolute() or not Path(transcript).is_file():
+        return False
+    folder = _folder(root, event.get('session_id'))
+    folder.mkdir(parents=True, exist_ok=True)
+    with locked(safe_path(folder, '.room-agents.lock'), timeout=2):
+        if safe_path(folder, 'session.json').exists() or safe_path(folder, 'parent-binding.json').exists():
+            return _is_parent(folder, event)
+        atomic_json(safe_path(folder, 'parent-binding.json'),
+                    {'schema_version': 1, 'kind': 'actual-launcher-callback',
+                     'session_id': event['session_id'], 'transcript_path': transcript,
+                     'observed_event': event.get('hook_event_name')})
+    return True
 
 
 def _completed_spawn(entry, transcript):
@@ -182,7 +202,7 @@ def role_overrides(root, home, contexts, write=False):
     for role in WORKER_ROOMS:
         instructions = contexts[role]['prompt'] + '\n' + POLICY
         content = 'developer_instructions = ' + json.dumps(instructions, ensure_ascii=False) + '\n'
-        guard = shlex.join([sys.executable, str(Path(__file__).resolve().parents[1] / 'house.py'),
+        guard = shell_command([sys.executable, str(Path(__file__).resolve().parents[1] / 'house.py'),
                             'session', 'hook', '--project', str(root), '--room', role, '--event', 'PreToolUse'])
         content += ('\n[[hooks.PreToolUse]]\nmatcher = "^(spawn_agent|Agent|send_input|resume_agent)$"\n'
                     '[[hooks.PreToolUse.hooks]]\ntype = "command"\ncommand = '
