@@ -19,7 +19,7 @@ import uuid
 from . import __version__
 from .project import ROOMS, _lock, _release, _root, base_version, bootstrap, document_status
 from .storage import HouseError, atomic_json, locked, read_json, safe_path
-from .templates import HANDOFF_LIMIT, LEGACY_PLACEHOLDERS, MIGRATED_STATUS, STATUS_MARK, status_line
+from .templates import HANDOFF_LIMIT, LEGACY_PLACEHOLDERS, MIGRATED_STATUS, RECORD_LIMIT, STATUS_MARK, status_line
 
 MB = 1024 * 1024
 RECENT_SECONDS = 30 * 60
@@ -261,7 +261,7 @@ def _newest_change(path):
 
 
 def offload(root, target, to=None, link=True, content_hash=False, allow_records=False, dry_run=False, cwd=None,
-            allow_recent=False):
+            allow_recent=False, reason=None):
     """Move a raw-data path out of house/, leaving a relative link and a size/file manifest."""
     root = Path(root).resolve()
     lock = _lock(root)
@@ -272,6 +272,8 @@ def offload(root, target, to=None, link=True, content_hash=False, allow_records=
     if (root / relative).is_symlink():
         raise HouseError("이미 house/ 밖으로 연결된 경로입니다: {}".format(relative))
     source = safe_path(root, relative)
+    from .research import guard_move
+    preservation = guard_move(root, relative, link, reason)
     if not (source.is_dir() or source.is_file()):
         raise HouseError("옮길 파일이나 폴더가 아닙니다: {}".format(source))
     # Resolve once so the relative link and the recorded location describe the same path.
@@ -279,8 +281,17 @@ def offload(root, target, to=None, link=True, content_hash=False, allow_records=
     if data_root == root or root in data_root.parents:
         raise HouseError("원본 데이터 위치는 house/ 밖이어야 합니다: {}".format(data_root))
     destination = data_root / relative
+    manifest_path = safe_path(destination.parent, destination.name + '.house-manifest.json')
+    from .research import guard_destination
+    guard_destination(root, destination)
+    guard_destination(root, manifest_path)
+    ignore = safe_path(data_root, '.gitignore')
+    if not ignore.exists():
+        guard_destination(root, ignore)
     if destination.exists() or destination.is_symlink():
         raise HouseError("대상 경로가 이미 있습니다. 기존 데이터를 덮어쓰지 않습니다: {}".format(destination))
+    if manifest_path.exists() or manifest_path.is_symlink():
+        raise HouseError('기존 이동 manifest를 덮어쓰지 않습니다: ' + str(manifest_path))
     if source.is_dir():
         records = sorted(str(p.relative_to(root)) for p in source.rglob("*.md") if not p.is_symlink())
         if records and not allow_records:
@@ -294,41 +305,61 @@ def offload(root, target, to=None, link=True, content_hash=False, allow_records=
     files = sum(1 for entry in entries if entry[1] == "file")
     size = sum(entry[2] for entry in entries if entry[1] == "file")
     plan = {"root": str(root), "path": relative, "destination": str(destination), "link": link,
-            "kind": "directory" if source.is_dir() else "file", "files": files, "bytes": size}
+            "kind": "directory" if source.is_dir() else "file", "files": files, "bytes": size,
+            "preservation": preservation}
     if dry_run:
         return dict(plan, status="planned")
     home = _root(Path(lock["home"]))
     with locked(_guard(home, root)):
+        # Recheck the declared project policy before any move is performed.
+        preservation = guard_move(root, relative, link, reason)
+        plan['preservation'] = preservation
+        guard_destination(root, destination)
+        guard_destination(root, manifest_path)
+        if manifest_path.exists() or manifest_path.is_symlink():
+            raise HouseError('기존 이동 manifest를 덮어쓰지 않습니다: ' + str(manifest_path))
         data_root.mkdir(parents=True, exist_ok=True)
-        ignore = data_root / ".gitignore"
         if not ignore.exists() and not ignore.is_symlink():
             # The data directory excludes itself from any enclosing repository.
-            ignore.write_text("# House 원본 데이터: git에서 제외한다.\n*\n", encoding="utf-8")
+            guard_destination(root, ignore)
+            with ignore.open('x', encoding='utf-8') as stream:
+                stream.write("# House 원본 데이터: git에서 제외한다.\n*\n")
         destination.parent.mkdir(parents=True, exist_ok=True)
         # rename() would silently replace an empty directory or a file created since the first check.
         if destination.exists() or destination.is_symlink():
             raise HouseError("대상 경로가 이미 있습니다. 기존 데이터를 덮어쓰지 않습니다: {}".format(destination))
+        manifest_created = False
         try:
-            os.rename(str(source), str(destination))
-        except OSError as exc:
-            if exc.errno != errno.EXDEV:
-                raise HouseError("옮기지 못했습니다: {}".format(exc)) from exc
-            _copy_verified(source, destination, entries, content_hash)
-            if source.is_dir():
-                shutil.rmtree(str(source))
-            else:
-                source.unlink()
+            # Claim the sidecar before moving anything. A concurrent sidecar wins
+            # without losing or moving the original data.
+            with manifest_path.open('x', encoding='utf-8') as stream:
+                manifest_created = True
+                json.dump({"schema_version": 1, "path": relative, "created_at": _now(),
+                           "content_hashed": content_hash, "entries": entries}, stream, ensure_ascii=False, indent=2)
+                stream.write('\n')
+            try:
+                os.rename(str(source), str(destination))
+            except OSError as exc:
+                if exc.errno != errno.EXDEV:
+                    raise HouseError("옮기지 못했습니다: {}".format(exc)) from exc
+                _copy_verified(source, destination, entries, content_hash)
+                if source.is_dir():
+                    shutil.rmtree(str(source))
+                else:
+                    source.unlink()
+        except BaseException:
+            if manifest_created:
+                manifest_path.unlink()
+            raise
         if link:
             os.symlink(os.path.relpath(str(destination), str(source.parent)), str(source))
-        manifest_path = destination.parent / (destination.name + ".house-manifest.json")
-        atomic_json(manifest_path, {"schema_version": 1, "path": relative, "created_at": _now(),
-                                    "content_hashed": content_hash, "entries": entries})
         record = {"path": relative, "location": os.path.relpath(str(destination), str(root)),
                   "absolute": str(destination), "link": link, "kind": plan["kind"], "files": files,
                   "bytes": size, "digest": _digest(entries), "content_hashed": content_hash,
                   "manifest": str(manifest_path), "moved_at": _now()}
         if content_hash:
             record["content_digest"] = hashlib.sha256(json.dumps(entries, separators=(",", ":")).encode("utf-8")).hexdigest()
+        record['preservation'] = preservation
         index = _read_index(root)
         index["entries"] = [e for e in index["entries"] if e.get("path") != relative] + [record]
         atomic_json(safe_path(root, INDEX), index)
@@ -336,19 +367,21 @@ def offload(root, target, to=None, link=True, content_hash=False, allow_records=
 
 
 def offload_suggested(root, to=None, link=True, content_hash=False, dry_run=False, dir_threshold=100 * MB,
-                      file_threshold=10 * MB):
+                      file_threshold=10 * MB, reason=None):
     """Offload every current check candidate; recently changed or refused paths are reported, not moved."""
     root = Path(root).resolve()
     moved, skipped = [], []
     for candidate in check(root, dir_threshold, file_threshold)["offload_candidates"]:
         try:
             result = offload(root, candidate["path"], to=to, link=link, content_hash=content_hash,
-                             dry_run=dry_run, cwd=root)
+                             dry_run=dry_run, cwd=root, reason=reason)
         except HouseError as exc:
             skipped.append({"path": candidate["path"], "bytes": candidate["bytes"], "reason": str(exc).splitlines()[0]})
             continue
         moved.append({"path": candidate["path"], "bytes": candidate["bytes"], "status": result["status"]})
-    return {"root": str(root), "status": "planned" if dry_run else "moved", "moved": moved, "skipped": skipped,
+    status = ('planned' if dry_run else 'partially_moved' if moved and skipped else
+              'blocked' if skipped else 'moved' if moved else 'unchanged')
+    return {"root": str(root), "status": status, "moved": moved, "skipped": skipped,
             "bytes": sum(item["bytes"] for item in moved),
             "note": "후보는 한 번에 최대 30개입니다. 남은 후보는 house check로 다시 확인하세요."}
 
@@ -419,11 +452,18 @@ def check(root, dir_threshold=100 * MB, file_threshold=10 * MB):
     offloaded = verify_offloaded(root)
     notes = _template_notes(root, templates)
     advice = []
+    from .research import check as research_check
+    try:
+        research = research_check(root)
+    except (HouseError, OSError, UnicodeError) as exc:
+        research = {'status': 'blocked', 'ready': False, 'errors': [str(exc)]}
+    if research['status'] == 'blocked':
+        advice.append('연구 입력·범위·기준 확인 필요: ' + '; '.join(research['errors']))
     if lock["release"] != __version__ and (base_version(lock["release"]) or (0,)) < base_version(__version__):
         advice.append("이 프로젝트는 House {}에 고정되어 있습니다. house migrate로 {} 구조를 적용할 수 있습니다.".format(
             lock["release"], __version__))
     if candidates:
-        advice.append("원본 데이터로 보이는 폴더·파일 {}개({}): house offload <경로>로 house/ 밖에 옮기세요.".format(
+        advice.append("원본 데이터 후보 {}개({}): 보존 목적·의존성과 프로젝트 정책을 확인한 뒤 house offload <경로>를 검토하세요.".format(
             len(candidates), _size(sum(c["bytes"] for c in candidates))))
     if git["mode"] == "none":
         advice.append("house/가 git으로 추적되지 않습니다. 원본을 옮긴 뒤 house track을 실행하세요.")
@@ -442,6 +482,14 @@ def check(root, dir_threshold=100 * MB, file_threshold=10 * MB):
     if handoff_chars > HANDOFF_LIMIT:
         advice.append("main/handoff.md가 {}자입니다. 현재 상태 스냅샷으로 다시 써서 {}자 이내로 줄이세요.".format(
             handoff_chars, HANDOFF_LIMIT))
+    large = {}
+    for name in ('work', 'decisions', 'target', 'design'):
+        path = safe_path(root, 'main/' + name + '.md')
+        if path.is_file() and len(path.read_text(encoding='utf-8')) > RECORD_LIMIT:
+            large['main/' + name + '.md'] = len(path.read_text(encoding='utf-8'))
+    if large:
+        advice.append("길어진 기록 {}: 보존 목적·의존성을 검토하세요. 길이만으로 이동하지 않습니다. 합의된 보관에는 main/archive/<날짜>/를 사용할 수 있습니다 (기준 {}자).".format(
+            ", ".join("{} {}자".format(k, v) for k, v in large.items()), RECORD_LIMIT))
     if offloaded["problems"]:
         advice.append("옮긴 원본 데이터에 문제가 있습니다: {}건".format(len(offloaded["problems"])))
     return {"root": str(root), "release": lock["release"], "engine": __version__,
@@ -451,7 +499,7 @@ def check(root, dir_threshold=100 * MB, file_threshold=10 * MB):
             "large_files": sorted(large_files, key=lambda item: -item["bytes"])[:30],
             "git": git, "stale_status": stale, "template_notes": notes,
             "handoff": {"chars": handoff_chars, "limit": HANDOFF_LIMIT, "over": handoff_chars > HANDOFF_LIMIT},
-            "offloaded": offloaded, "advice": advice}
+            "large_records": large, "offloaded": offloaded, "research": research, "advice": advice}
 
 
 def render_check(report):
@@ -460,6 +508,7 @@ def render_check(report):
                                                 report["size"]["links"]),
              "  " + "  ".join("{} {}".format(room, _size(size)) for room, size in report["size"]["rooms"].items())]
     git = report["git"]
+    lines.append('연구 계약: ' + report['research']['status'] + ' (파일 검사이며 과학적 타당성 인증은 아님)')
     lines.append("git: " + {"unavailable": "설치되지 않음", "none": "추적 안 함",
                             "house": "house/ 자체 저장소", "parent": "상위 저장소 " + git.get("toplevel", "")}[git["mode"]]
                  + ("" if git["mode"] in ("none", "unavailable") else
@@ -501,6 +550,8 @@ def _fix_status(current, old_template, new_template):
 def migrate(root, release=None, reason=None, dry_run=False):
     root = Path(root).resolve()
     lock = _lock(root)
+    from .research import load as research_contract
+    research_contract(root)  # Never reconstruct missing/invalid adopted scientific state.
     home = _root(Path(lock["home"]))
     bootstrap(home)  # shared state only: publishes the engine release a migration reads
     target = release or __version__
@@ -533,6 +584,8 @@ def migrate(root, release=None, reason=None, dry_run=False):
             changes.append({"path": relative, "action": "status_line", "text": fixed})
         elif relative in INSTRUCTION_FILES or relative.endswith(("/ROOM.md", "/GUIDE.md")):
             kept.append({"path": relative, "reason": "사용자 편집이 있어 보존 (새 지침은 공용 릴리스에서 읽음)"})
+        elif relative == 'research.json':
+            kept.append({'path': relative, 'reason': '합의한 연구 계약을 보존하며 새 양식으로 추정 교체하지 않음'})
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     job = "main/jobs/house-migrate-{}-to-{}-{}".format(origin, target, stamp)
     summary = {"root": str(root), "from_release": origin, "release": target, "job": job,
@@ -557,7 +610,7 @@ def migrate(root, release=None, reason=None, dry_run=False):
             os.replace(str(temporary), str(path))
     if origin != target:
         from .updates import pin_project
-        pin_project(root, target, reason or "House {} → {} 구조 개선(상태 줄, handoff 스냅샷, git 기록, 원본 데이터 분리) 적용".format(origin, target))
+        pin_project(root, target, reason or "House {} → {} 구조 개선(연구 계약, 실행 근거, 인계·보존 정책) 적용".format(origin, target))
     report = check(root)
     summary.update(status="migrated", check=report)
     summary["report"] = _report(summary, report, dry_run=False)
@@ -583,6 +636,9 @@ def _report(summary, report, dry_run):
     lines += section("status_line", "초기 상태 문구를 House 상태 줄로 교체")
     lines += ["## 보존한 파일", ""] + (["- {} — {}".format(k["path"], k["reason"]) for k in summary["kept"]] or ["- 없음"]) + [""]
     todo, chat = [], []
+    if report.get('research', {}).get('status') == 'blocked':
+        todo.append('research.json의 실제 합의·범위·입력·기준 소유자/상태·보존 정책을 확인한다. 새 양식은 미합의 상태다.')
+        chat.append('연구 계약 확인')
     if report["template_notes"]:
         todo.append("템플릿 문구를 해명하던 줄을 정리한다 (상태 줄이 대신한다):\n" + "\n".join(
             "   - {}:{} — {}".format(n["path"], n["line"], n["text"][:100]) for n in report["template_notes"][:20]))
@@ -594,8 +650,8 @@ def _report(summary, report, dry_run):
             report["handoff"]["chars"], report["handoff"]["limit"]))
         chat.append("handoff 다시 쓰기")
     if report["offload_candidates"]:
-        todo.append("원본 데이터 폴더를 house/ 밖으로 옮긴다. 실행 중인 계산의 출력 폴더는 제외한다:\n" + "\n".join(
-            "   - house offload {}  ({}, {}개)".format(c["path"], _size(c["bytes"]), c["files"])
+        todo.append("원본 후보의 보존 목적·의존성·실행 상태를 검토한다. 계약이 허용한 이동만 수행한다:\n" + "\n".join(
+            "   - house offload {} --no-link --reason '<합의한 목적>' --dry-run  ({}, {}개)".format(c["path"], _size(c["bytes"]), c["files"])
             for c in report["offload_candidates"][:20]))
     git = report["git"]
     if git["mode"] == "none":
