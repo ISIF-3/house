@@ -2,8 +2,8 @@
 
 하나의 공용 공장에서 여러 연구 프로젝트를 운영합니다. 터미널의 `house`와 Codex의 `$house`는 같은 엔진과 파일을 사용합니다. 기존 프로젝트의 파일을 옮기거나 덮어쓰지 않습니다.
 
-**이 브랜치는 0.4.2 개발 버전입니다.** 처음 설치하거나 연결·경고 기능을 설정하려면
-[설치·실행·설정 안내](docs/setup.md)를 먼저 보세요. 해당 기능은 아래처럼 브랜치를 지정해 설치합니다.
+**현재 버전은 0.4.2입니다.** 처음 설치하거나 연결·경고 기능을 설정하려면
+[설치·실행·설정 안내](docs/setup.md)를 먼저 보세요. 기본 설치와 업데이트는 `main`을 사용합니다.
 
 ## 시작
 
@@ -12,7 +12,7 @@ Python 외부 패키지는 필요하지 않습니다. 다음은 macOS·Linux·WS
 [Windows PowerShell 설치](docs/setup.md#windows-powershell)는 별도로 안내합니다.
 
 ```sh
-git clone --branch feat/house-0.4.2-connect https://github.com/ISIF-3/house.git "$HOME/house"
+git clone --branch main https://github.com/ISIF-3/house.git "$HOME/house"
 cd "$HOME/house"
 python3 install.py
 "$HOME/.local/bin/house" --version
@@ -40,7 +40,7 @@ Codex 앱·CLI·확장에서 프로젝트를 열고 **`$house 연구 목표를 �
 
 Main은 연구의 이유·최종 목표를 정리하고 데이터, 방법, 평가 기준과 자원을 설명합니다. 실제 AI·통계 모델 구현은 설계에 합의한 뒤 시작합니다. 초기화 시 가짜 노트북·논문·결과·승인을 만들지 않습니다.
 
-## 현재 대화에 세션 알림 연결 (0.4.2 개발 버전)
+## 현재 대화에 세션 알림 연결 (0.4.2)
 
 VS Code의 Codex 확장·내장 터미널, 독립 CLI, 로컬 데스크톱 앱에서 같은 프로젝트 연결을 사용합니다.
 지원되는 호스트의 project hooks에 등록하며, 설정 등록·실제 이벤트 수신·화면 경고 확인을 구분합니다.

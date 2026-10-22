@@ -1,8 +1,7 @@
 # House 설치·실행·설정
 
-이 문서는 **0.4.2 개발 브랜치 `feat/house-0.4.2-connect`** 기준입니다.
-`main`에는 앞선 변경의 PR이 남아 있을 수 있으므로, 아래 설치 명령은 이번 연결·경고 기능이 있는
-브랜치를 명시합니다. 현재 검증 범위는 [검증 기록](verification.md#042-채팅-경고-전달--2026-10-22)에 있습니다.
+이 문서는 **House 0.4.2** 기준입니다. 기본 설치와 업데이트는 `main`을 사용합니다.
+현재 검증 범위는 [검증 기록](verification.md#042-채팅-경고-전달--2026-10-22)에 있습니다.
 
 ## 준비
 
@@ -22,7 +21,7 @@
 아직 `$HOME/house`에 다른 폴더가 없는 새 설치 예시입니다. 이미 설치했다면 아래 업데이트 절차를 사용합니다.
 
 ```sh
-git clone --branch feat/house-0.4.2-connect https://github.com/ISIF-3/house.git "$HOME/house"
+git clone --branch main https://github.com/ISIF-3/house.git "$HOME/house"
 cd "$HOME/house"
 python3 install.py
 "$HOME/.local/bin/house" --version
@@ -52,7 +51,7 @@ native Windows Python과 Codex를 사용하는 예시입니다. symlink 권한 �
 `house.cmd`를 만듭니다.
 
 ```powershell
-git clone --branch feat/house-0.4.2-connect https://github.com/ISIF-3/house.git "$HOME\house"
+git clone --branch main https://github.com/ISIF-3/house.git "$HOME\house"
 Set-Location "$HOME\house"
 py -3 install.py
 & "$HOME\.local\bin\house.cmd" --version
@@ -227,7 +226,7 @@ JSON을 전달하며, 잘못되거나 없는 경로 매핑을 다른 transcript�
 ```sh
 cd "$HOME/house"
 git status --short
-git switch feat/house-0.4.2-connect
+git switch main
 git pull --ff-only
 python3 install.py
 house --version
