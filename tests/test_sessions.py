@@ -107,6 +107,19 @@ class SessionTests(unittest.TestCase):
         self.assertNotIn('systemMessage', forwarded)
         self.assertEqual(self.event('PostToolUse'), {})
 
+    def test_checkpoint_has_canonical_utf8_bytes_and_preserves_crlf_handoff(self):
+        self.start()
+        handoff = self.directory() / 'handoff.md'
+        original = HANDOFF.replace('\n', '\r\n').encode('utf-8')
+        handoff.write_bytes(original)
+        result = sessions.checkpoint(self.root, 'main', self.session_id)
+        snapshot = Path(result['checkpoint']['path'])
+        content = snapshot.read_bytes()
+        self.assertEqual(content, HANDOFF.encode('utf-8'))
+        self.assertEqual(hashlib.sha256(content).hexdigest(), result['checkpoint']['hash'])
+        self.assertEqual(handoff.read_bytes(), original)
+        self.assertEqual(sessions._snapshot_path(self.directory(), result['checkpoint'], verify=True), snapshot)
+
     def test_resume_and_compact_start_keep_counts_and_surface_review(self):
         self.start()
         self.auto()

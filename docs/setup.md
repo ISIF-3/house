@@ -277,5 +277,5 @@ PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=skill/scripts python3 -m unittest discover 
 node tests/web_session_smoke.js
 ```
 
-Python 검사 323개 중 321개 통과·2개 건너뜀과 실제 현재 대화의 경고 전달을 검증했습니다.
+Python 검사 326개 중 324개 통과·2개 건너뜀과 실제 현재 대화의 경고 전달을 검증했습니다.
 다른 OS·클라이언트의 실제 UI 검증 상태는 [검증 기록](verification.md)을 참고하세요.

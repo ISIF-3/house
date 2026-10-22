@@ -233,9 +233,10 @@ def checkpoint(root, room, session_id, boundary=False):
         folder = safe_path(directory, 'snapshots')
         folder.mkdir(exist_ok=True)
         snapshot = safe_path(folder, uuid.uuid4().hex + '.md')
-        with snapshot.open('x', encoding='utf-8') as stream:
-            stream.write(text)
-        saved = {'path': str(snapshot), 'hash': hashlib.sha256(text.encode()).hexdigest(),
+        content = text.encode('utf-8')
+        with snapshot.open('xb') as stream:
+            stream.write(content)
+        saved = {'path': str(snapshot), 'hash': hashlib.sha256(content).hexdigest(),
                  'saved_at': _now(), 'auto_compactions': state['auto_compactions']}
         recommend = bool(boundary and state['auto_compactions'] >= 10 and not state.get('recommended_at'))
         state.update(checkpoint=saved, review_required=False)

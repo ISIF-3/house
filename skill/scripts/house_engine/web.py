@@ -358,6 +358,8 @@ class WebController:
                     self.current_effort = settings.get('effort') if _model_name(settings.get('effort')) else None
                     self.current_service_tier = settings.get('serviceTier') if _model_name(settings.get('serviceTier')) else None
             elif method == 'turn/started':
+                if (params.get('threadId'), params.get('turn', {}).get('id')) in self.completed_turns:
+                    return
                 self.rooms[room]['status'] = 'working'
                 if room == 'main':
                     self.turn_id = params.get('turn', {}).get('id')

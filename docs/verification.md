@@ -148,3 +148,25 @@ PostToolUse의 hookSpecificOutput.additionalContext로 일회성 시험을 실�
   **채팅 본문의 표시를 확인했다**. native 팝업 표시와 실제 70% 도달은 이 확인에 포함하지 않는다.
   원본 확인 기록은 같은 로컬 검증 폴더의
   `display-confirmation-HOUSE-DELIVERY-d63fc5d95ed3.json`에 보존했다.
+
+### GitHub 게시 후 CI 수정 · 2026-10-22
+
+[PR #4](https://github.com/ISIF-3/house/pull/4)의 첫 게시 커밋
+`1b8ce4ea3d9039e76be8d94dec55fb6dfbb7cfaa`는 검토한 로컬 트리와 동일하다.
+[push 검사](https://github.com/ISIF-3/house/actions/runs/39706575412)의 Linux·macOS 네 조합에서
+Python·Node 검사를 통과했으며, Windows에서는 명령 인용 검사와 저장 스냅샷 해시 검사가 실패했다.
+[PR 검사](https://github.com/ISIF-3/house/actions/runs/39706585959)에서는 같은 Windows 실패와
+복원된 웹 대기열의 간헐적 정지가 발견됐다. 이 최초 결과는 후속 통과 결과와 구분해 보존한다.
+
+Windows의 text-mode 저장이 LF를 CRLF로 바꾸면서 저장 파일의 바이트와 메모리에서 계산한 해시가
+달라졌다. 기존·v2 checkpoint 모두 검증된 텍스트를 UTF-8 바이트로 저장하고 그 바이트의 해시를
+기록한다. 원본 인계 파일은 보존한다. 명령 검사는 해당 OS의 shell formatter가 만든 전체 명령을 확인한다.
+
+대기열 검사에서는 시작 요청 직후 빠른 완료 이벤트를 받은 뒤 늦은 시작 이벤트가 상태를 다시
+working으로 바꾸어 다음 요청을 막을 수 있었다. 완료한 (thread, turn)의 시작 이벤트를 무시해
+완료 상태를 유지한다. 수정 전 엔진에서 새 회귀 검사가 실패하는 것을 재현했고, 수정 후에는
+다음 요청까지 진행되는 것을 확인했다. OS별 스냅샷 바이트·해시·원본 보존 검사도 추가했다.
+
+수정 후 로컬 전체 검사: **326개 실행, 324개 통과, 2개 건너뜀**, 34.714초.
+초기 게시 전의 323개 검사 결과는 위에 별도로 보존한다. Windows의 후속 실행 결과는
+PR의 해당 수정 커밋에 대한 GitHub Actions 결과로 확인한다.

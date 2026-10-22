@@ -158,7 +158,9 @@ class SessionBridgeTests(unittest.TestCase):
         self.assertEqual(state['identity_status'], 'provisional')
         self.assertIsNone(state['prior_compactions'])
         self.assertIn(state['handoff_path'], output['systemMessage'])
-        self.assertIn('house connection checkpoint', output['systemMessage'])
+        command = bridge.shell_command(['house', 'connection', 'checkpoint', state['conversation_key'],
+                                        '--project', str(self.root.parent)])
+        self.assertIn(command, output['systemMessage'])
         after = self.manifest(self.root)
         self.assertTrue(all(after[path] == digest for path, digest in protected.items()))
         self.assertFalse((self.root / 'main/sessions/actual-session').exists())
@@ -335,6 +337,18 @@ class SessionBridgeTests(unittest.TestCase):
         alerts = [alert for alert in self.state()['alerts'] if alert['kind'] == 'new_session_recommendation']
         self.assertEqual(len(alerts), 1)
         self.assertIn(alerts[0]['alert_id'], self.event()['systemMessage'])
+
+    def test_checkpoint_has_canonical_utf8_bytes_and_preserves_crlf_handoff(self):
+        self.event()
+        state = self.state()
+        handoff = Path(state['handoff_path'])
+        original = HANDOFF.replace('\n', '\r\n').encode('utf-8')
+        handoff.write_bytes(original)
+        result = bridge.checkpoint(self.root, state['conversation_key'])
+        content = Path(result['checkpoint']['path']).read_bytes()
+        self.assertEqual(content, HANDOFF.encode('utf-8'))
+        self.assertEqual(hashlib.sha256(content).hexdigest(), result['checkpoint']['hash'])
+        self.assertEqual(handoff.read_bytes(), original)
 
     def test_invalid_handoff_cannot_checkpoint_or_recommend(self):
         self.event()

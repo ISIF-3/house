@@ -491,9 +491,10 @@ def checkpoint(root, conversation_key, boundary=False):
         snapshots = safe_path(directory, 'snapshots')
         snapshots.mkdir(exist_ok=True)
         snapshot = safe_path(snapshots, uuid.uuid4().hex + '.md')
-        with snapshot.open('x', encoding='utf-8') as stream:
-            stream.write(text)
-        saved = {'path': str(snapshot), 'hash': hashlib.sha256(text.encode()).hexdigest(),
+        content = text.encode('utf-8')
+        with snapshot.open('xb') as stream:
+            stream.write(content)
+        saved = {'path': str(snapshot), 'hash': hashlib.sha256(content).hexdigest(),
                  'saved_at': _stamp(), 'auto_compactions': state['auto_compactions'], 'boundary': bool(boundary)}
         recommend = bool(boundary and state['auto_compactions'] >= 10 and not state['recommended_at'])
         state.update(checkpoint=saved, review_required=False)

@@ -455,6 +455,17 @@ class WebTests(unittest.TestCase):
         turn = next(params for method, params in factory.instances[-1].calls if method == 'turn/start')
         self.assertNotIn('model', turn)
 
+    def test_late_started_event_cannot_revive_completed_turn_or_block_queue(self):
+        controller, factory = self.controller()
+        controller.on_message({'method': 'turn/completed', 'params': {'threadId': 'native-web',
+                               'turn': {'id': 'already-completed', 'status': 'completed'}}})
+        controller.on_message({'method': 'turn/started', 'params': {'threadId': 'native-web',
+                               'turn': {'id': 'already-completed', 'status': 'inProgress'}}})
+        self.assertIsNone(controller.turn_id)
+        self.assertEqual(controller.rooms['main']['status'], 'idle')
+        controller.submit('main', '다음 대기 작업')
+        self.wait_for(lambda: any(method == 'turn/start' for method, _ in factory.instances[-1].calls))
+
     def test_restored_legacy_queue_omits_model_and_resume_uses_native_observation(self):
         original, _ = self.controller()
         original.close()
