@@ -1,0 +1,75 @@
+name: Capture House README image
+on:
+  push:
+    branches: [docs/readme-capture-20261022]
+    paths: [.github/workflows/readme-capture.yml]
+permissions:
+  contents: write
+jobs:
+  capture:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Capture the unmodified disconnected frontend
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/docs/readme-capture-20261022
+          command -v google-chrome
+          sudo apt-get update -qq
+          sudo apt-get install -y fonts-noto-cjk
+          mkdir -p docs/media
+          python3 -m http.server 8769 --bind 127.0.0.1 --directory skill/web > "$RUNNER_TEMP/house-web-http.log" 2>&1 &
+          HOUSE_CAPTURE_SERVER_PID=$!
+          trap 'kill "$HOUSE_CAPTURE_SERVER_PID" 2>/dev/null || true' EXIT
+          python3 - <<'PY'
+          import time, urllib.request
+          for attempt in range(50):
+              try:
+                  with urllib.request.urlopen('http://127.0.0.1:8769/', timeout=1) as response:
+                      assert response.status == 200
+                  break
+              except OSError:
+                  time.sleep(0.1)
+          else:
+              raise SystemExit('Original frontend HTTP server did not become ready')
+          PY
+          google-chrome --headless=new --no-sandbox --disable-gpu --disable-dev-shm-usage --hide-scrollbars --window-size=1440,1720 --force-device-scale-factor=1 --virtual-time-budget=3500 --screenshot=docs/media/house-web.png http://127.0.0.1:8769/
+          python3 - <<'PY'
+          import hashlib, json, os, struct, subprocess
+          from pathlib import Path
+          from datetime import datetime, timezone
+          image = Path('docs/media/house-web.png')
+          data = image.read_bytes()
+          assert data[:8] == b'\x89PNG\r\n\x1a\n', 'Missing valid PNG screenshot'
+          width, height = struct.unpack('>II', data[16:24])
+          assert (width, height) == (1440, 1720), (width, height)
+          font_family = subprocess.check_output(['fc-match', '-f', '%{family}', 'sans-serif:lang=ko'], text=True).strip()
+          assert 'CJK' in font_family, 'Korean-capable CJK font was not selected: ' + font_family
+          record = {
+              'captured_at': datetime.now(timezone.utc).isoformat(),
+              'source_commit': os.environ['GITHUB_SHA'],
+              'source_base_commit': '9bc5e8818a440892187530511dbbc970d401b57f',
+              'workflow_run': os.environ['GITHUB_SERVER_URL'] + '/' + os.environ['GITHUB_REPOSITORY'] + '/actions/runs/' + os.environ['GITHUB_RUN_ID'],
+              'browser': subprocess.check_output(['google-chrome', '--version'], text=True).strip(),
+              'viewport': {'width': width, 'height': height, 'device_scale_factor': 1},
+              'page': 'Unmodified skill/web/index.html, style.css and app.js served from a temporary loopback static HTTP server.',
+              'state': 'Disconnected, without an authentication token. No model, conversation, fixture state or research data was supplied.',
+              'source_sha256': {name: hashlib.sha256((Path('skill/web') / name).read_bytes()).hexdigest() for name in ['index.html', 'style.css', 'app.js']},
+              'screenshot': {'path': str(image), 'sha256': hashlib.sha256(data).hexdigest(), 'bytes': len(data)},
+              'fonts': {'package': 'fonts-noto-cjk', 'korean_match': font_family},
+              'image_edits': 'none'
+          }
+          Path('docs/media/house-web.capture.json').write_text(json.dumps(record, ensure_ascii=False, indent=2) + '\n')
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- docs/media/house-web.png docs/media/house-web.capture.json
+          python3 - <<'PY'
+          import subprocess
+          staged = subprocess.check_output(['git', 'diff', '--cached', '--name-only'], text=True).splitlines()
+          assert set(staged) == {'docs/media/house-web.png', 'docs/media/house-web.capture.json'}, staged
+          PY
+          git commit -m 'docs: capture the original House web interface'
+          git push origin HEAD:refs/heads/docs/readme-capture-20261022
